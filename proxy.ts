@@ -1,4 +1,3 @@
-import { auth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
@@ -13,12 +12,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check auth for protected routes
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
+  // Check for session cookie (Better Auth cookie names)
+  const sessionCookie = 
+    request.cookies.get('better-auth.session_token') ||
+    request.cookies.get('__better-auth.session_token') ||
+    request.cookies.get('better-auth.session');
 
-  if (!session?.user) {
+  if (!sessionCookie) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', request.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
