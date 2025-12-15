@@ -23,6 +23,8 @@ model User {
   updatedAt     DateTime  @updatedAt
   sessions      Session[]
   accounts      Account[]
+  leagueMembers LeagueMember[]
+  players       Player[]
 
   @@unique([email])
   @@map("user")
@@ -74,4 +76,117 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+enum LeagueMemberStatus {
+  ACTIVE
+  PENDING
+  REVOKED
+}
+
+enum LeagueMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum NightStatus {
+  DRAFT
+  FINAL
+}
+
+model League {
+  id          String         @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  members     LeagueMember[]
+  seasons     Season[]
+
+  @@map("league")
+}
+
+model LeagueMember {
+  id        String            @id @default(uuid())
+  leagueId  String
+  league    League            @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email     String
+  status    LeagueMemberStatus @default(PENDING)
+  role      LeagueMemberRole  @default(MEMBER)
+  inviteToken String?         @unique
+  invitedAt  DateTime?
+  joinedAt   DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([leagueId, email])
+  @@index([leagueId])
+  @@index([userId])
+  @@index([email])
+  @@index([inviteToken])
+  @@map("league_member")
+}
+
+model Player {
+  id        String   @id @default(uuid())
+  name      String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  entries   Entry[]
+
+  @@index([userId])
+  @@map("player")
+}
+
+model Season {
+  id          String   @id @default(uuid())
+  leagueId    String
+  league      League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  name        String
+  startDate   DateTime
+  endDate     DateTime?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  nights      Night[]
+
+  @@index([leagueId])
+  @@map("season")
+}
+
+model Night {
+  id          String      @id @default(uuid())
+  seasonId    String
+  season      Season      @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  date        DateTime
+  status      NightStatus @default(DRAFT)
+  notes       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  entries     Entry[]
+
+  @@index([seasonId])
+  @@index([date])
+  @@map("night")
+}
+
+model Entry {
+  id                String   @id @default(uuid())
+  nightId           String
+  night             Night     @relation(fields: [nightId], references: [id], onDelete: Cascade)
+  playerId          String
+  player            Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  buyInTotalCents   Int
+  cashOutTotalCents Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([nightId])
+  @@index([playerId])
+  @@map("entry")
 }

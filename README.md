@@ -1,36 +1,193 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pkr Trackr
 
-## Getting Started
+An online poker cash-game league tracker built with Next.js 16, TypeScript, Prisma, and Better Auth.
 
-First, run the development server:
+## Features
+
+- **League Management**: Create and manage poker leagues with multiple seasons
+- **Night Tracking**: Track individual game nights with buy-ins and cash-outs
+- **Player Management**: Support for both registered users and guest players
+- **Invitations**: Email-based invitation system for league members
+- **Leaderboards**: Multiple leaderboard views (Best Player, Top Winner, Best Performer, etc.)
+- **Metrics**: Automatic calculation of ROI, performance scores, and more
+- **Validation**: Ensures buy-ins equal cash-outs before finalizing nights
+
+## Tech Stack
+
+- **Next.js 16** (App Router)
+- **TypeScript**
+- **Prisma 7** with PostgreSQL
+- **Better Auth** (email/password authentication)
+- **Tailwind CSS**
+- **shadcn/ui**
+- **Zod** (validation)
+- **pnpm**
+
+## Prerequisites
+
+- Node.js 18+ 
+- PostgreSQL database
+- pnpm (install with `npm install -g pnpm`)
+
+## Setup Instructions
+
+### 1. Install Dependencies
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Create a `.env` file in the root directory:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```env
+# Database
+DATABASE_URL="postgresql://user:password@localhost:5432/pkr-trackr?schema=public"
 
-## Learn More
+# Better Auth
+BETTER_AUTH_SECRET="your-secret-key-here" # Generate with: openssl rand -base64 32
+BETTER_AUTH_URL="http://localhost:3000"
 
-To learn more about Next.js, take a look at the following resources:
+# Next.js
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. Database Setup
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+# Generate Prisma Client
+pnpm prisma generate
 
-## Deploy on Vercel
+# Run migrations
+pnpm prisma migrate dev
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Seed the database with demo data
+pnpm db:seed
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The seed file creates:
+- A demo user (email: `demo@pkr-trackr.com`, password: you'll need to register)
+- A demo league
+- 6 sample players (mix of guest and user-linked)
+- 1 active season
+- 6 sample nights (5 finalized, 1 draft) with various buy-in amounts
+
+### 4. Run Development Server
+
+```bash
+pnpm dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Project Structure
+
+```
+pkr-trackr/
+├── app/                    # Next.js App Router pages
+│   ├── login/             # Authentication pages
+│   ├── register/
+│   ├── invite/            # Invite acceptance flow
+│   ├── leagues/           # League management
+│   └── api/               # API routes
+├── components/
+│   └── ui/                # shadcn/ui components
+├── lib/                   # Shared utilities
+│   ├── auth.ts            # Better Auth configuration
+│   ├── prisma.ts          # Prisma client
+│   └── utils.ts           # Utility functions
+├── src/
+│   └── server/
+│       ├── actions/       # Server actions
+│       ├── auth/          # Auth utilities
+│       └── metrics/       # Metrics calculations
+├── prisma/
+│   ├── schema.prisma      # Database schema
+│   └── seed.ts            # Seed file
+└── public/                 # Static assets
+```
+
+## Core Concepts
+
+### Domain Model
+
+- **User**: Authenticated users
+- **League**: A poker league
+- **LeagueMember**: User membership in a league (ACTIVE/PENDING/REVOKED, OWNER/ADMIN/MEMBER)
+- **Player**: Can be a guest or linked to a user
+- **Season**: A time period within a league
+- **Night**: A single game night (DRAFT/FINAL)
+- **Entry**: A player's participation in a night (buy-in and cash-out)
+
+### Metrics
+
+All metrics are computed automatically:
+
+- **Per Entry**: Profit, ROI, Performance Score, Table Share, Pot-Weighted Score
+- **Per Season**: Total Profit, Total Buy-in, Season ROI, Season Score, Nights Played, Best Single Night, Best Table Share
+
+### Validation Rules
+
+- Money is stored in integer cents only
+- A night cannot be finalized unless `sum(buyIns) === sum(cashOuts)`
+- All performance metrics are computed, never manually edited
+
+## Usage
+
+### Creating a League
+
+1. Register/Login
+2. Click "Create League"
+3. Fill in league name and description
+4. You'll be automatically added as OWNER
+
+### Inviting Members
+
+1. Go to your league's Settings tab
+2. Enter an email address
+3. Click "Send Invite"
+4. Share the invite link with the user
+5. They'll be added as PENDING until they accept
+
+### Managing Nights
+
+1. Create a Season (Settings tab)
+2. Go to Nights tab
+3. Click "New Night"
+4. Add entries for each player
+5. Finalize the night when buy-ins equal cash-outs
+
+### Viewing Leaderboards
+
+Navigate to the Leaderboards tab to see:
+- Best Player (by Season ROI)
+- Top Winner (by Total Profit)
+- Best Performer (by Season Score)
+- Most Action (by Total Buy-in)
+- Best Night (by single night score)
+- Biggest Table Take (by best table share)
+
+## Development
+
+### Database Migrations
+
+```bash
+# Create a new migration
+pnpm prisma migrate dev --name migration-name
+
+# Reset database (WARNING: deletes all data)
+pnpm prisma migrate reset
+```
+
+### Prisma Studio
+
+View and edit your database:
+
+```bash
+pnpm prisma studio
+```
+
+## License
+
+MIT
