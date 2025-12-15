@@ -1,7 +1,14 @@
+import 'dotenv/config';
 import { PrismaClient } from '../generated/prisma/client';
 import { hashPassword } from '../lib/argon2';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL,
+    },
+  },
+});
 
 async function main() {
   console.log('Seeding database...');
