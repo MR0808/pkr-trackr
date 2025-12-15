@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { getLeaderboard } from '@/src/server/actions/leaderboardActions';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { formatCents, formatPercentage } from '@/src/server/metrics/pokerMetrics';
+import { formatCents, formatPercentage } from '@/src/lib/format';
 import { Trophy, DollarSign, TrendingUp, Activity, Star, Target } from 'lucide-react';
 
 interface LeaderboardsTabProps {

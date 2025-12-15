@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { updateUserAdmin, deleteUser, deleteLeague } from '@/src/server/actions/adminActions';
-import { formatCents } from '@/src/server/metrics/pokerMetrics';
+import { formatCents } from '@/src/lib/format';
 import { Users, Trophy, Calendar, Moon, DollarSign, Trash2, Shield, ShieldOff } from 'lucide-react';
 
 interface AdminDashboardProps {
