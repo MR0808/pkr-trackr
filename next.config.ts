@@ -1,22 +1,15 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      // Exclude Prisma and Node.js modules from client bundle
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        net: false,
-        tls: false,
-      };
+    // Exclude Prisma from Edge Runtime (moved from experimental in Next.js 16)
+    serverExternalPackages: ['@prisma/client', '@prisma/adapter-pg'],
+    // Add empty turbopack config to silence the warning
+    turbopack: {},
+    experimental: {
+        serverActions: {
+            bodySizeLimit: '5mb'
+        }
     }
-    return config;
-  },
-  // Exclude Prisma from Edge Runtime
-  experimental: {
-    serverComponentsExternalPackages: ['@prisma/client', '@prisma/adapter-pg'],
-  },
 };
 
 export default nextConfig;
