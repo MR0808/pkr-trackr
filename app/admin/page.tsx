@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { getSession } from '@/src/server/auth/getSession';
 import { requireAdmin } from '@/src/server/auth/requireAdmin';
 import { getSystemStats, getAllUsers, getAllLeagues } from '@/src/server/actions/adminActions';
@@ -28,9 +29,9 @@ export default async function AdminPage() {
       <nav className="border-b bg-white dark:bg-zinc-900">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <a href="/" className="text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50">
+            <Link href="/" className="text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50">
               ← Back to App
-            </a>
+            </Link>
             <h1 className="text-2xl font-bold">Admin Dashboard</h1>
           </div>
         </div>

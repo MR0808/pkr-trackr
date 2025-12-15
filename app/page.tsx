@@ -21,7 +21,16 @@ export default async function HomePage() {
       <nav className="border-b bg-white dark:bg-zinc-900">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold">Pkr Trackr</h1>
-          <SignOutButton />
+          <div className="flex items-center gap-4">
+            {(session.user as any).isAdmin && (
+              <Link href="/admin">
+                <Button variant="outline" size="sm">
+                  Admin Dashboard
+                </Button>
+              </Link>
+            )}
+            <SignOutButton />
+          </div>
         </div>
       </nav>
 

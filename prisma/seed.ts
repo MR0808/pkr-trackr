@@ -12,12 +12,15 @@ async function main() {
 
   const demoUser = await prisma.user.upsert({
     where: { email: 'demo@pkr-trackr.com' },
-    update: {},
+    update: {
+      isAdmin: true, // Ensure demo user is always an admin
+    },
     create: {
       id: 'demo-user-1',
       name: 'Demo User',
       email: 'demo@pkr-trackr.com',
       emailVerified: true,
+      isAdmin: true, // Make demo user an admin
     },
   });
 
@@ -414,6 +417,7 @@ async function main() {
   console.log('✅ Seed completed successfully!');
   console.log(`   - Created demo user: ${demoUser.email}`);
   console.log(`   - Password: ${demoPassword}`);
+  console.log(`   - Admin: ${demoUser.isAdmin ? 'Yes' : 'No'}`);
   console.log(`   - Created league: ${demoLeague.name}`);
   console.log(`   - Created ${players.length} players`);
   console.log(`   - Created season: ${season.name}`);
@@ -421,6 +425,7 @@ async function main() {
   console.log('\n📝 Login credentials:');
   console.log(`   Email: ${demoUser.email}`);
   console.log(`   Password: ${demoPassword}`);
+  console.log(`   Admin Access: Yes (can access /admin dashboard)`);
 }
 
 main()

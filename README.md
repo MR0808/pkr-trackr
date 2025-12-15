@@ -58,12 +58,14 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
 # Generate Prisma Client
 npx prisma generate
 
-# Run migrations
-npx prisma migrate dev
+# Run migrations (this will create the isAdmin field)
+npx prisma migrate dev --name add_admin_field
 
 # Seed the database with demo data
 npm run db:seed
 ```
+
+**Note:** The migration will add an `isAdmin` field to the User model. The demo user created by the seed script will automatically have admin privileges.
 
 The seed file creates:
 - A demo user (email: `demo@pkr-trackr.com`, password: `demo123`)
@@ -191,15 +193,33 @@ npx prisma studio
 
 ## Admin Dashboard
 
-Currently, Pkr Trackr uses a **league-based permission system** rather than a global admin dashboard:
+Pkr Trackr includes a **global admin dashboard** accessible at `/admin` for users with admin privileges.
+
+### Admin Features
+
+- **System Overview**: View statistics (total users, leagues, nights, volume)
+- **User Management**: 
+  - View all users
+  - Grant/revoke admin privileges
+  - Delete users
+- **League Management**:
+  - View all leagues
+  - Delete leagues
+  - View league owners and statistics
+
+### Making a User an Admin
+
+Admins can grant admin privileges to other users through the admin dashboard. The demo user created by the seed script is automatically an admin.
+
+### League-Based Permissions
+
+In addition to global admin access, Pkr Trackr uses a **league-based permission system**:
 
 - **League Owners** can manage their league (invite members, create seasons, finalize nights)
 - **League Admins** can manage most league functions (invite members, create seasons)
 - **League Members** can view and participate in their leagues
 
-There is **no system-wide admin dashboard** in the current implementation. Each league operates independently with its own owners and admins.
-
-If you need a global admin dashboard to manage all leagues, users, and system settings, this would need to be added as a separate feature.
+Each league operates independently with its own owners and admins, while global admins can manage the entire system.
 
 ## License
 
