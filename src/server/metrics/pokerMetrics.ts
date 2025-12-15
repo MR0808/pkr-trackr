@@ -3,6 +3,8 @@
  * Single source of truth for all poker performance metrics
  */
 
+import { calculateEntryMetrics, calculateNightPot } from '@/src/lib/format';
+
 export interface EntryMetrics {
   profit: number; // in cents
   roi: number; // percentage (e.g., 0.15 = 15%)
@@ -25,7 +27,7 @@ export interface SeasonMetrics {
 }
 
 // Re-export client-safe functions for server use
-export { calculateEntryMetrics, calculateNightPot } from '@/src/lib/format';
+export { calculateEntryMetrics, calculateNightPot };
 
 /**
  * Calculate season metrics for a player

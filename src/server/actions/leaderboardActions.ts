@@ -79,6 +79,7 @@ export async function getLeaderboard(
         cashOutTotalCents: number;
         night: {
           id: string;
+          status: string;
           entries: Array<{ buyInTotalCents: number }>;
         };
       }>;
@@ -102,6 +103,7 @@ export async function getLeaderboard(
         cashOutTotalCents: entry.cashOutTotalCents,
         night: {
           id: night.id,
+          status: night.status,
           entries: night.entries.map((e) => ({
             buyInTotalCents: e.buyInTotalCents,
           })),
