@@ -1,11 +1,15 @@
 import { PrismaClient } from '../generated/prisma/client';
+import { hashPassword } from '../lib/argon2';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('Seeding database...');
 
-  // Create demo user
+  // Create demo user with password
+  const demoPassword = 'demo123';
+  const hashedPassword = await hashPassword(demoPassword);
+
   const demoUser = await prisma.user.upsert({
     where: { email: 'demo@pkr-trackr.com' },
     update: {},
@@ -16,6 +20,33 @@ async function main() {
       emailVerified: true,
     },
   });
+
+  // Create account with password for Better Auth
+  // Check if account already exists
+  const existingAccount = await prisma.account.findFirst({
+    where: {
+      userId: demoUser.id,
+      providerId: 'credential',
+    },
+  });
+
+  if (!existingAccount) {
+    await prisma.account.create({
+      data: {
+        id: `account-${demoUser.id}`,
+        accountId: demoUser.email,
+        providerId: 'credential',
+        userId: demoUser.id,
+        password: hashedPassword,
+      },
+    });
+  } else {
+    // Update password if account exists
+    await prisma.account.update({
+      where: { id: existingAccount.id },
+      data: { password: hashedPassword },
+    });
+  }
 
   // Create demo league
   const demoLeague = await prisma.league.create({
@@ -382,10 +413,14 @@ async function main() {
 
   console.log('✅ Seed completed successfully!');
   console.log(`   - Created demo user: ${demoUser.email}`);
+  console.log(`   - Password: ${demoPassword}`);
   console.log(`   - Created league: ${demoLeague.name}`);
   console.log(`   - Created ${players.length} players`);
   console.log(`   - Created season: ${season.name}`);
   console.log(`   - Created ${nights.length} nights`);
+  console.log('\n📝 Login credentials:');
+  console.log(`   Email: ${demoUser.email}`);
+  console.log(`   Password: ${demoPassword}`);
 }
 
 main()

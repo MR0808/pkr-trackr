@@ -21,20 +21,19 @@ An online poker cash-game league tracker built with Next.js 16, TypeScript, Pris
 - **Tailwind CSS**
 - **shadcn/ui**
 - **Zod** (validation)
-- **pnpm**
+- **npm**
 
 ## Prerequisites
 
 - Node.js 18+ 
 - PostgreSQL database
-- pnpm (install with `npm install -g pnpm`)
 
 ## Setup Instructions
 
 ### 1. Install Dependencies
 
 ```bash
-pnpm install
+npm install
 ```
 
 ### 2. Environment Variables
@@ -57,26 +56,28 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
 
 ```bash
 # Generate Prisma Client
-pnpm prisma generate
+npx prisma generate
 
 # Run migrations
-pnpm prisma migrate dev
+npx prisma migrate dev
 
 # Seed the database with demo data
-pnpm db:seed
+npm run db:seed
 ```
 
 The seed file creates:
-- A demo user (email: `demo@pkr-trackr.com`, password: you'll need to register)
+- A demo user (email: `demo@pkr-trackr.com`, password: `demo123`)
 - A demo league
 - 6 sample players (mix of guest and user-linked)
 - 1 active season
 - 6 sample nights (5 finalized, 1 draft) with various buy-in amounts
 
+**Note:** The seed will display the login credentials after running. You can use these to log in immediately.
+
 ### 4. Run Development Server
 
 ```bash
-pnpm dev
+npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
@@ -174,10 +175,10 @@ Navigate to the Leaderboards tab to see:
 
 ```bash
 # Create a new migration
-pnpm prisma migrate dev --name migration-name
+npx prisma migrate dev --name migration-name
 
 # Reset database (WARNING: deletes all data)
-pnpm prisma migrate reset
+npx prisma migrate reset
 ```
 
 ### Prisma Studio
@@ -185,8 +186,20 @@ pnpm prisma migrate reset
 View and edit your database:
 
 ```bash
-pnpm prisma studio
+npx prisma studio
 ```
+
+## Admin Dashboard
+
+Currently, Pkr Trackr uses a **league-based permission system** rather than a global admin dashboard:
+
+- **League Owners** can manage their league (invite members, create seasons, finalize nights)
+- **League Admins** can manage most league functions (invite members, create seasons)
+- **League Members** can view and participate in their leagues
+
+There is **no system-wide admin dashboard** in the current implementation. Each league operates independently with its own owners and admins.
+
+If you need a global admin dashboard to manage all leagues, users, and system settings, this would need to be added as a separate feature.
 
 ## License
 
