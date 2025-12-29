@@ -6,6 +6,7 @@ import { signIn } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
+import { Logo } from '@/components/brand/Logo';
 import Link from 'next/link';
 
 function LoginForm() {
@@ -43,18 +44,21 @@ function LoginForm() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black p-4">
-      <Card className="w-full max-w-md p-6">
-        <h1 className="text-2xl font-bold mb-6">Login to Pkr Trackr</h1>
+    <div className="flex min-h-screen items-center justify-center bg-brand-bg p-4">
+      <Card className="w-full max-w-md p-6 bg-zinc-900 border-zinc-800">
+        <div className="flex justify-center mb-6">
+          <Logo variant="lockup" size="lg" />
+        </div>
+        <h1 className="text-2xl font-semibold mb-6 text-center">Login</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-400 text-sm">
+            <div className="p-3 bg-red-900/20 border border-red-800 rounded text-red-400 text-sm">
               {error}
             </div>
           )}
           <div>
             <label htmlFor="email" className="block text-sm font-medium mb-1">
-              Email
+              Email *
             </label>
             <Input
               id="email"
@@ -63,11 +67,12 @@ function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
               required
               disabled={loading}
+              className="bg-zinc-800 border-zinc-700"
             />
           </div>
           <div>
             <label htmlFor="password" className="block text-sm font-medium mb-1">
-              Password
+              Password *
             </label>
             <Input
               id="password"
@@ -76,15 +81,16 @@ function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
               required
               disabled={loading}
+              className="bg-zinc-800 border-zinc-700"
             />
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? 'Logging in...' : 'Login'}
           </Button>
         </form>
-        <p className="mt-4 text-sm text-center text-zinc-600 dark:text-zinc-400">
+        <p className="mt-4 text-sm text-center text-zinc-400">
           Don't have an account?{' '}
-          <Link href="/register" className="text-blue-600 dark:text-blue-400 hover:underline">
+          <Link href="/register" className="text-brand-red hover:underline">
             Register
           </Link>
         </p>
@@ -96,9 +102,9 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black p-4">
-        <Card className="w-full max-w-md p-6">
-          <div className="text-center">Loading...</div>
+      <div className="flex min-h-screen items-center justify-center bg-brand-bg p-4">
+        <Card className="w-full max-w-md p-6 bg-zinc-900 border-zinc-800">
+          <div className="text-center text-brand-fg">Loading...</div>
         </Card>
       </div>
     }>

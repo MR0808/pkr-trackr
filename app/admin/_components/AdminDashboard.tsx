@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { updateUserAdmin, deleteUser, deleteLeague } from '@/src/server/actions/adminActions';
 import { formatCents } from '@/src/lib/format';
+import { getUserFullName } from '@/src/lib/user';
 import { Users, Trophy, Calendar, Moon, DollarSign, Trash2, Shield, ShieldOff } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -22,7 +23,8 @@ interface AdminDashboardProps {
   };
   users: Array<{
     id: string;
-    name: string;
+    firstName: string;
+    lastName: string;
     email: string;
     isAdmin: boolean;
     emailVerified: boolean;
@@ -44,7 +46,8 @@ interface AdminDashboardProps {
     members: Array<{
       user: {
         id: string;
-        name: string;
+        firstName: string;
+        lastName: string;
         email: string;
       } | null;
     }>;
@@ -174,7 +177,7 @@ export function AdminDashboard({ stats, users, leagues }: AdminDashboardProps) {
               <TableBody>
                 {users.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.name}</TableCell>
+                    <TableCell className="font-medium">{getUserFullName(user)}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
                       <div className="flex gap-2">
@@ -214,7 +217,7 @@ export function AdminDashboard({ stats, users, leagues }: AdminDashboardProps) {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleDeleteUser(user.id, user.name)}
+                          onClick={() => handleDeleteUser(user.id, getUserFullName(user))}
                           disabled={loading === user.id}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -250,7 +253,9 @@ export function AdminDashboard({ stats, users, leagues }: AdminDashboardProps) {
                       {league.description || '-'}
                     </TableCell>
                     <TableCell>
-                      {league.members[0]?.user?.name || 'Unknown'}
+                      {league.members[0]?.user
+                        ? getUserFullName(league.members[0].user)
+                        : 'Unknown'}
                     </TableCell>
                     <TableCell>{league._count.members}</TableCell>
                     <TableCell>{league._count.seasons}</TableCell>

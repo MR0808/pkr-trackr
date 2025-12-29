@@ -25,13 +25,13 @@ interface NightEntriesProps {
       cashOutTotalCents: number;
       player: {
         id: string;
-        name: string;
+        displayName: string;
       };
     }>;
   };
   players: Array<{
     id: string;
-    name: string;
+    displayName: string;
     userId: string | null;
   }>;
 }
@@ -176,7 +176,7 @@ export function NightEntries({ leagueId, night, players }: NightEntriesProps) {
                 <option value="">-- Select Player --</option>
                 {players.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}
+                    {p.displayName}
                   </option>
                 ))}
               </select>
@@ -258,7 +258,7 @@ export function NightEntries({ leagueId, night, players }: NightEntriesProps) {
               if (editingId === entry.id) {
                 return (
                   <TableRow key={entry.id}>
-                    <TableCell>{entry.player.name}</TableCell>
+                    <TableCell>{entry.player.displayName}</TableCell>
                     <TableCell>
                       <Input
                         type="number"
@@ -302,7 +302,7 @@ export function NightEntries({ leagueId, night, players }: NightEntriesProps) {
 
               return (
                 <TableRow key={entry.id}>
-                  <TableCell className="font-medium">{entry.player.name}</TableCell>
+                  <TableCell className="font-medium">{entry.player.displayName}</TableCell>
                   <TableCell>${formatCents(entry.buyInTotalCents)}</TableCell>
                   <TableCell>${formatCents(entry.cashOutTotalCents)}</TableCell>
                   <TableCell

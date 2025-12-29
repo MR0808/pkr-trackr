@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { getUserFullName } from '@/src/lib/user';
 import { Mail, UserPlus } from 'lucide-react';
 
 interface SettingsTabProps {
@@ -21,7 +22,8 @@ interface SettingsTabProps {
       role: string;
       user: {
         id: string;
-        name: string;
+        firstName: string;
+        lastName: string;
         email: string;
       } | null;
     }>;
@@ -95,7 +97,7 @@ export function SettingsTab({ league }: SettingsTabProps) {
               <div className="flex justify-between items-center">
                 <div>
                   <div className="font-semibold">
-                    {member.user ? member.user.name : member.email}
+                    {member.user ? getUserFullName(member.user) : member.email}
                   </div>
                   <div className="text-sm text-zinc-600 dark:text-zinc-400">
                     {member.email}

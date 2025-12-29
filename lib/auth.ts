@@ -18,11 +18,6 @@ const options = {
             verify: verifyPassword
         }
     },
-    advanced: {
-        database: {
-            generateId: false
-        }
-    },
     session: {
         expiresIn: 30 * 24 * 60 * 60,
         cookieCache: {

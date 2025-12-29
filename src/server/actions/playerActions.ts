@@ -5,13 +5,13 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '../auth/getSession';
 
 const createPlayerSchema = z.object({
-  name: z.string().min(1).max(100),
+  name: z.string().min(1).max(100), // Accept 'name' for backward compatibility, map to displayName
   userId: z.string().uuid().optional(),
 });
 
 const updatePlayerSchema = z.object({
   playerId: z.string().uuid(),
-  name: z.string().min(1).max(100).optional(),
+  displayName: z.string().min(1).max(100).optional(),
   userId: z.string().uuid().nullable().optional(),
 });
 
@@ -26,7 +26,7 @@ export async function createPlayer(data: z.infer<typeof createPlayerSchema>) {
   // If userId is provided, verify it matches session or is null (guest player)
   const player = await prisma.player.create({
     data: {
-      name: validated.name,
+      displayName: validated.name, // Map 'name' to 'displayName'
       userId: validated.userId || null,
     },
   });
@@ -56,7 +56,7 @@ export async function updatePlayer(data: z.infer<typeof updatePlayerSchema>) {
   const updated = await prisma.player.update({
     where: { id: validated.playerId },
     data: {
-      name: validated.name,
+      displayName: validated.displayName,
       userId: validated.userId ?? undefined,
     },
   });
@@ -129,7 +129,8 @@ export async function getPlayers(leagueId: string) {
       user: {
         select: {
           id: true,
-          name: true,
+          firstName: true,
+          lastName: true,
           email: true,
         },
       },
@@ -140,7 +141,7 @@ export async function getPlayers(leagueId: string) {
       },
     },
     orderBy: {
-      name: 'asc',
+      displayName: 'asc',
     },
   });
 

@@ -118,7 +118,7 @@ export async function getLeaderboard(
       const metrics = calculateSeasonMetrics(entries);
       return {
         playerId: player.id,
-        playerName: player.name,
+        playerName: player.displayName,
         userId: player.userId,
         ...metrics,
       };

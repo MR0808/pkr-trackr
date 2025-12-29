@@ -22,10 +22,15 @@ async function main() {
     where: { email: 'demo@pkr-trackr.com' },
     update: {
       isAdmin: true, // Ensure demo user is always an admin
+      name: 'Demo User', // Better Auth requires name
+      firstName: 'Demo',
+      lastName: 'User',
     },
     create: {
       id: 'demo-user-1',
-      name: 'Demo User',
+      name: 'Demo User', // Better Auth requires name
+      firstName: 'Demo',
+      lastName: 'User',
       email: 'demo@pkr-trackr.com',
       emailVerified: true,
       isAdmin: true, // Make demo user an admin
@@ -79,22 +84,22 @@ async function main() {
   // Create guest players
   const players = await Promise.all([
     prisma.player.create({
-      data: { name: 'Alice' },
+      data: { displayName: 'Alice' },
     }),
     prisma.player.create({
-      data: { name: 'Bob' },
+      data: { displayName: 'Bob' },
     }),
     prisma.player.create({
-      data: { name: 'Charlie', userId: demoUser.id },
+      data: { displayName: 'Charlie', userId: demoUser.id },
     }),
     prisma.player.create({
-      data: { name: 'Diana' },
+      data: { displayName: 'Diana' },
     }),
     prisma.player.create({
-      data: { name: 'Eve' },
+      data: { displayName: 'Eve' },
     }),
     prisma.player.create({
-      data: { name: 'Frank' },
+      data: { displayName: 'Frank' },
     }),
   ]);
 

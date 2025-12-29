@@ -8,11 +8,15 @@ export async function getSession() {
     headers: headersList,
   });
 
-  // Enrich session with isAdmin field
+  // Enrich session with additional user fields
   if (session?.user) {
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { isAdmin: true },
+      select: {
+        isAdmin: true,
+        firstName: true,
+        lastName: true,
+      },
     });
     if (user) {
       return {
@@ -20,6 +24,8 @@ export async function getSession() {
         user: {
           ...session.user,
           isAdmin: user.isAdmin,
+          firstName: user.firstName,
+          lastName: user.lastName,
         },
       };
     }
