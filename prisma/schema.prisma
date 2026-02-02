@@ -13,25 +13,97 @@ datasource db {
   provider = "postgresql"
 }
 
+/*
+  ============================
+  ENUMS
+  ============================
+*/
+
+enum UserStatus {
+  ACTIVE
+  DEACTIVATED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  NOTSAY
+}
+
+enum GroupRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum GameStatus {
+  OPEN
+  CLOSED
+}
+
+enum InviteType {
+  GROUP_JOIN
+  PLAYER_CLAIM
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+/*
+  ============================
+  USER (Better-Auth compatible)
+  ============================
+*/
+
 model User {
-  id                   String    @id
+  id        String  @id @default(uuid())
   name                 String    // Required by Better Auth, auto-populated from firstName + lastName
   firstName            String
   lastName             String
   email                String
   emailVerified        Boolean   @default(false)
+  emailVerifiedAt      DateTime?
+  status               UserStatus @default(ACTIVE)
   image                String?
   isAdmin              Boolean   @default(false)
-  onboardingCompletedAt DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   sessions             Session[]
   accounts             Account[]
-  leagueMembers        LeagueMember[]
-  players              Player[]
+
+  // Optional profile fields
+  gender        Gender?
+  dateOfBirth   DateTime?
+  phoneNumber   String?   @unique
+  phoneVerified Boolean   @default(false)
+  bio           String?
+
+  // Geo preferences (safe deletes!)
+  countryId String?
+  regionId  String?
+
+  country Country? @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  region  Region?  @relation(fields: [regionId], references: [id], onDelete: SetNull)
+
+  // Relationships
+  groupsOwned Group[]       @relation("GroupOwner")
+  memberships GroupMember[]
+  players     Player[]
+  invitesSent GroupInvite[] @relation("InvitesSent")
+
+  // Better Auth / verification back-relations
+  verifications              Verification[]
+  emailVerificationChallenges EmailVerificationChallenge[]
+  emailChangeRecords         EmailChangeRecord[]
+  phoneChangeRecords         PhoneChangeRecord[]
 
   @@unique([email])
-  @@map("user")
+  @@map("users")
 }
 
 model Session {
@@ -47,7 +119,7 @@ model Session {
 
   @@unique([token])
   @@index([userId])
-  @@map("session")
+  @@map("sessions")
 }
 
 model Account {
@@ -67,130 +139,352 @@ model Account {
   updatedAt             DateTime  @updatedAt
 
   @@index([userId])
-  @@map("account")
+  @@map("accounts")
 }
 
 model Verification {
-  id         String   @id @default(uuid())
+  id         String    @id
   identifier String
   value      String
   expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime?
+  updatedAt  DateTime?
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([identifier])
-  @@map("verification")
+  @@index([expiresAt])
+  @@index([userId])
+  @@map("verifications")
 }
 
-enum LeagueMemberStatus {
-  ACTIVE
-  PENDING
-  REVOKED
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+  @@map("verification_tokens")
 }
 
-enum LeagueMemberRole {
-  OWNER
-  ADMIN
-  MEMBER
-}
+model EmailVerificationChallenge {
+  id             String   @id @default(cuid())
+  userId         String
+  email          String
 
-enum NightStatus {
-  DRAFT
-  FINAL
-}
+  magicTokenHash String
+  otpHash        String
 
-model League {
-  id          String         @id @default(uuid())
-  name        String
-  description String?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  members     LeagueMember[]
-  seasons     Season[]
+  magicExpiresAt DateTime
+  otpExpiresAt   DateTime
 
-  @@map("league")
-}
+  otpAttempts    Int      @default(0)
 
-model LeagueMember {
-  id        String            @id @default(uuid())
-  leagueId  String
-  league    League            @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  userId    String?
-  user      User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
-  email     String
-  status    LeagueMemberStatus @default(PENDING)
-  role      LeagueMemberRole  @default(MEMBER)
-  inviteToken String?         @unique
-  invitedAt  DateTime?
-  joinedAt   DateTime?
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
+  sendCount      Int      @default(0)
+  lastSentAt     DateTime?
 
-  @@unique([leagueId, email])
-  @@index([leagueId])
+  usedAt         DateTime?
+  revokedAt      DateTime?
+
+  createdAt      DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([email])
-  @@index([inviteToken])
-  @@map("league_member")
+  @@map("email_verification_challenges")
 }
 
-model Player {
-  id          String   @id @default(uuid())
-  displayName String
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  entries     Entry[]
+model EmailChangeRecord {
+  id        String   @id @default(cuid())
+  email     String
+  newEmail  String   @map("new_email")
+  otp       String
+  expiresAt DateTime @map("expires_at")
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@map("player")
+  @@index([expiresAt])
+  @@map("email_change_records")
 }
+
+model PhoneChangeRecord {
+  id             String   @id @default(cuid())
+  phoneNumber    String?
+  newPhoneNumber String
+  otp            String
+  expiresAt      DateTime @map("expires_at")
+  attempts       Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([otp])
+  @@index([expiresAt])
+  @@map("phone_change_records")
+}
+
+model Continent {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  countries Country[]
+
+  @@map("continents")
+}
+
+model Country {
+  id          String  @id @default(cuid())
+  isoCode     String  @unique // ISO 3166-1 alpha-2
+  isoCode3    String  @unique // ISO 3166-1 alpha-3
+  name        String
+  flag        String
+  latitude    Float
+  longitude   Float
+  continentId String
+  phonePrefix String?
+
+  continent Continent @relation(fields: [continentId], references: [id], onDelete: Restrict)
+
+  regions Region[]
+  users   User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("countries")
+}
+
+model Region {
+  id        String @id @default(cuid())
+  code      String
+  name      String
+  countryId String
+
+  country Country @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  users   User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([countryId, code])
+  @@map("regions")
+}
+
+/* ============================
+   GROUP / LEAGUE
+   ============================ */
+
+model Group {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+
+  ownerId  String
+  owner    User     @relation("GroupOwner", fields: [ownerId], references: [id])
+
+  players  Player[]
+  games    Game[]
+  seasons  Season[]
+  members  GroupMember[]
+  invites  GroupInvite[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@map("groups")
+}
+
+/* ============================
+   GROUP MEMBERSHIP
+   ============================ */
+
+model GroupMember {
+  id      String    @id @default(cuid())
+  groupId String
+  userId  String
+  role    GroupRole @default(MEMBER)
+
+  group   Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([groupId, userId])
+  @@map("group_members")
+}
+
+/* ============================
+   PLAYER (Reusable Identity)
+   ============================ */
+
+model Player {
+  id        String   @id @default(cuid())
+  groupId   String
+  name      String
+
+  email     String?
+  userId    String?
+
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  games       GamePlayer[]
+  seasonStats SeasonPlayerStats[]
+  invites     GroupInvite[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, name])
+  @@unique([groupId, email])
+  @@index([groupId])
+  @@index([email])
+  @@map("players")
+}
+
+/* ============================
+   SEASON
+   ============================ */
 
 model Season {
-  id          String   @id @default(uuid())
-  leagueId    String
-  league      League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  name        String
-  startDate   DateTime
-  endDate     DateTime?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  nights      Night[]
+  id        String   @id @default(cuid())
+  groupId   String
+  name      String
+  startsAt  DateTime
+  endsAt    DateTime?
+  isLocked  Boolean  @default(false)
 
-  @@index([leagueId])
-  @@map("season")
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  games     Game[]
+  stats     SeasonPlayerStats[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([groupId, name])
+  @@index([groupId])
+  @@map("seasons")
 }
 
-model Night {
-  id          String      @id @default(uuid())
-  seasonId    String
-  season      Season      @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  date        DateTime
-  status      NightStatus @default(DRAFT)
-  notes       String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  entries     Entry[]
+/* ============================
+   GAME (Poker Night)
+   ============================ */
 
+model Game {
+  id        String     @id @default(cuid())
+  groupId   String
+  seasonId  String?
+
+  name      String
+  status    GameStatus @default(OPEN)
+
+  // NEW: planned start time (what you enter when creating)
+  scheduledAt DateTime
+
+  // Actual start (optional, you can set it when the game actually begins)
+  startedAt  DateTime?
+
+  closedAt   DateTime?
+
+  shareId   String     @unique
+
+  group     Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  season    Season?    @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+  players   GamePlayer[]
+
+  createdAt DateTime   @default(now())
+
+  @@index([groupId])
   @@index([seasonId])
-  @@index([date])
-  @@map("night")
+  @@index([scheduledAt])
+  @@map("games")
 }
 
-model Entry {
-  id                String   @id @default(uuid())
-  nightId           String
-  night             Night     @relation(fields: [nightId], references: [id], onDelete: Cascade)
-  playerId          String
-  player            Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  buyInTotalCents   Int
-  cashOutTotalCents Int
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+/* ============================
+   GAME PLAYER (Per-Night Stats)
+   ============================ */
 
-  @@index([nightId])
-  @@index([playerId])
-  @@map("entry")
+model GamePlayer {
+  id        String   @id @default(cuid())
+  gameId    String
+  playerId  String
+
+  buyInCents      Int  @default(0)
+  cashOutCents    Int?
+  adjustmentCents Int  @default(0)
+
+  game     Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  player   Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([gameId, playerId])
+  @@index([gameId])
+  @@map("game_players")
+}
+
+/* ============================
+   SEASON PLAYER STATS
+   (Cached leaderboard rollups)
+   ============================ */
+
+model SeasonPlayerStats {
+  id        String   @id @default(cuid())
+  seasonId  String
+  playerId  String
+
+  totalBuyInCents   Int @default(0)
+  totalCashOutCents Int @default(0)
+  totalProfitCents  Int @default(0)
+  totalGames        Int @default(0)
+
+  season   Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  player   Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([seasonId, playerId])
+  @@index([seasonId])
+  @@map("season_player_stats")
+}
+
+/* ============================
+   INVITES
+   ============================ */
+
+model GroupInvite {
+  id          String       @id @default(cuid())
+  groupId     String
+
+  type        InviteType
+  role        GroupRole?
+
+  email       String
+  playerId    String?
+
+  tokenHash   String       @unique
+  status      InviteStatus @default(PENDING)
+
+  createdById String?
+  createdBy   User?        @relation("InvitesSent", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime     @default(now())
+  sentAt      DateTime?
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+
+  group       Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  player      Player?      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, type, email, playerId])
+  @@index([groupId, status])
+  @@index([email])
+  @@index([expiresAt])
+  @@map("group_invites")
 }

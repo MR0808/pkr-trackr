@@ -1,33 +1,31 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
-import { ThemeProvider } from "@/components/theme/ThemeProvider";
-import { Toaster } from "@/components/ui/sonner";
+import type { Metadata } from 'next';
+import { Geist, Geist_Mono } from 'next/font/google';
+import './globals.css';
+import { Toaster } from '@/components/ui/sonner';
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  display: "swap",
-});
+const _geist = Geist({ subsets: ['latin'] });
+const _geistMono = Geist_Mono({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: "Pkr Trackr - Poker League Tracker",
-  description: "Track poker nights, leagues, and long-term performance — objectively.",
+    title: 'Pkr Trackr - Poker League Tracker',
+    description:
+        'Track poker nights, leagues, and long-term performance — objectively.',
+    appleWebApp: {
+        title: 'Pkr Trackr'
+    }
 };
 
 export default function RootLayout({
-  children,
+    children
 }: Readonly<{
-  children: React.ReactNode;
+    children: React.ReactNode;
 }>) {
-  return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased`}>
-        <ThemeProvider>
-          {children}
-          <Toaster />
-        </ThemeProvider>
-      </body>
-    </html>
-  );
+    return (
+        <html lang="en" suppressHydrationWarning>
+            <body className={`font-sans antialiased`} suppressHydrationWarning>
+                {children}
+                <Toaster position="top-center" richColors={true} />
+            </body>
+        </html>
+    );
 }
