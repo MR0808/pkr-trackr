@@ -26,9 +26,11 @@ import type { GameTotals } from '@/types/games';
 import type { Player } from '@/types/players';
 
 export type SortKey =
-    | 'profit'
-    | 'roi'
     | 'nightScore'
+    | 'profit'
+    | 'cashout'
+    | 'buyIns'
+    | 'roi'
     | 'tableShare'
     | 'potWeightedScore'
     | 'name';
@@ -56,9 +58,11 @@ interface ResultsListProps {
 }
 
 export const SORT_OPTIONS: { value: SortKey; label: string }[] = [
-    { value: 'profit', label: 'Profit' },
-    { value: 'roi', label: 'ROI' },
     { value: 'nightScore', label: 'Night Score' },
+    { value: 'profit', label: 'Profit' },
+    { value: 'cashout', label: 'Cashout' },
+    { value: 'buyIns', label: 'Buy-ins' },
+    { value: 'roi', label: 'ROI' },
     { value: 'tableShare', label: 'Table Share' },
     { value: 'potWeightedScore', label: 'Pot-Weighted Score' },
     { value: 'name', label: 'Name (A–Z)' }
@@ -81,6 +85,10 @@ function getSortValue(
     switch (key) {
         case 'profit':
             return profit;
+        case 'cashout':
+            return cashout;
+        case 'buyIns':
+            return buyIn;
         case 'roi':
             return roi;
         case 'nightScore':
@@ -106,7 +114,9 @@ function formatSortValue(
     if (typeof value === 'string') return value;
     switch (key) {
         case 'profit':
-            return formatCurrencyWithSign(value);
+        case 'cashout':
+        case 'buyIns':
+            return formatCurrency(value);
         case 'roi':
         case 'tableShare':
             return formatPercent(value);
@@ -221,7 +231,10 @@ export function ResultsList({
                                     </TableCell>
                                     <TableCell
                                         className={cn(
-                                            'p-1 text-right tabular-nums'
+                                            'p-1 text-right tabular-nums',
+                                            row.player.buyInsTotal >= 0
+                                                ? 'text-[hsl(var(--success))]'
+                                                : 'text-destructive'
                                         )}
                                     >
                                         {formatCurrencyWithSign(
@@ -230,7 +243,10 @@ export function ResultsList({
                                     </TableCell>
                                     <TableCell
                                         className={cn(
-                                            'p-1 text-right tabular-nums'
+                                            'p-1 text-right tabular-nums',
+                                            (row.player.cashout ?? 0) >= 0
+                                                ? 'text-[hsl(var(--success))]'
+                                                : 'text-destructive'
                                         )}
                                     >
                                         {formatCurrencyWithSign(
@@ -247,22 +263,58 @@ export function ResultsList({
                                     >
                                         {formatCurrencyWithSign(row.profit)}
                                     </TableCell>
-                                    <TableCell className="p-1 text-right tabular-nums text-foreground">
+                                    <TableCell
+                                        className={cn(
+                                            'p-1 text-right tabular-nums',
+                                            row.roi != null
+                                                ? row.roi >= 0
+                                                    ? 'text-[hsl(var(--success))]'
+                                                    : 'text-destructive'
+                                                : 'text-foreground'
+                                        )}
+                                    >
                                         {row.roi != null
                                             ? formatPercent(row.roi, 0)
                                             : '—'}
                                     </TableCell>
-                                    <TableCell className="p-1 text-right tabular-nums text-foreground">
+                                    <TableCell
+                                        className={cn(
+                                            'p-1 text-right tabular-nums',
+                                            row.nightScore != null
+                                                ? row.nightScore >= 0
+                                                    ? 'text-[hsl(var(--success))]'
+                                                    : 'text-destructive'
+                                                : 'text-foreground'
+                                        )}
+                                    >
                                         {row.nightScore != null
                                             ? row.nightScore.toFixed(1)
                                             : '—'}
                                     </TableCell>
-                                    <TableCell className="p-1 text-right tabular-nums text-foreground">
+                                    <TableCell
+                                        className={cn(
+                                            'p-1 text-right tabular-nums',
+                                            row.tableShare != null
+                                                ? row.tableShare >= 0
+                                                    ? 'text-[hsl(var(--success))]'
+                                                    : 'text-destructive'
+                                                : 'text-foreground'
+                                        )}
+                                    >
                                         {row.tableShare != null
                                             ? formatPercent(row.tableShare, 0)
                                             : '—'}
                                     </TableCell>
-                                    <TableCell className="p-1 text-right tabular-nums text-foreground">
+                                    <TableCell
+                                        className={cn(
+                                            'p-1 text-right tabular-nums',
+                                            row.potWeightedNightScore != null
+                                                ? row.potWeightedNightScore >= 0
+                                                    ? 'text-[hsl(var(--success))]'
+                                                    : 'text-destructive'
+                                                : 'text-foreground'
+                                        )}
+                                    >
                                         {row.potWeightedNightScore != null
                                             ? row.potWeightedNightScore.toFixed(
                                                   1

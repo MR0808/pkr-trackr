@@ -28,7 +28,7 @@ interface ResultsSectionProps {
 }
 
 export function ResultsSection({ game, totals, shareId }: ResultsSectionProps) {
-    const [sortBy, setSortBy] = useState<SortKey>('profit');
+    const [sortBy, setSortBy] = useState<SortKey>('nightScore');
 
     return (
         <>
