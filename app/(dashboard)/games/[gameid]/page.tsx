@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +20,10 @@ export default async function CashierPage({ params }: CashierPageProps) {
 
     if (!game || !totals) {
         notFound();
+    }
+
+    if (game.status === 'CLOSED') {
+        redirect(`/games/${gameid}/results`);
     }
 
     return (
@@ -58,7 +62,7 @@ export default async function CashierPage({ params }: CashierPageProps) {
                             <CloseGameDialog
                                 gameId={game.id}
                                 totals={totals}
-                                isGameClosed={game.status === 'CLOSED'}
+                                isGameClosed={false}
                             />
                         </div>
                     </div>
