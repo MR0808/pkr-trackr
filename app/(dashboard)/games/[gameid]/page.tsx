@@ -4,30 +4,29 @@ import { ArrowLeft } from 'lucide-react';
 import { getGame, calculateGameTotals } from '@/lib/mock-db';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { TotalsBar } from '@/components/pkr/totals-bar';
-import { CloseGameDialog } from '@/components/pkr/close-game-dialog';
-import { CashierClient } from '@/components/pkr/cashier-client';
+import { TotalsBar } from '@/components/games/view/TotalsBar';
+// import { CloseGameDialog } from '@/components/games/view/CloseGameDialog';
+import { CashierClient } from '@/components/games/view/CashierClient';
+import { loadGame } from '@/actions/games';
 
 interface CashierPageProps {
     params: Promise<{
-        gameId: string;
+        gameid: string;
     }>;
 }
 
 export default async function CashierPage({ params }: CashierPageProps) {
-    const { gameId } = await params;
-    const game = getGame(gameId);
+    const { gameid } = await params;
+    const { game, totals } = await loadGame(gameid);
 
-    if (!game) {
+    if (!game || !totals) {
         notFound();
     }
-
-    const totals = calculateGameTotals(game);
 
     return (
         <main className="min-h-screen pb-6">
             {/* Sticky Header */}
-            <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
                 <div className="container mx-auto max-w-7xl px-4 py-3 lg:px-6 lg:py-4">
                     <div className="flex flex-col gap-3">
                         <Button
@@ -57,11 +56,11 @@ export default async function CashierPage({ params }: CashierPageProps) {
                                     {game.status}
                                 </Badge>
                             </div>
-                            <CloseGameDialog
+                            {/* <CloseGameDialog
                                 gameId={game.id}
                                 totals={totals}
                                 isGameClosed={game.status === 'CLOSED'}
-                            />
+                            /> */}
                         </div>
                     </div>
                 </div>

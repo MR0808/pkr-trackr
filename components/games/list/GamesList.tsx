@@ -37,7 +37,7 @@ export function GamesList({ games }: GamesListProps) {
                 onValueChange={(v) => setFilter(v as typeof filter)}
                 className="w-full"
             >
-                <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
+                <TabsList className="grid w-full grid-cols-3 lg:w-100">
                     <TabsTrigger value="all">All ({games.length})</TabsTrigger>
                     <TabsTrigger value="open">Active ({openGames})</TabsTrigger>
                     <TabsTrigger value="closed">
@@ -55,8 +55,8 @@ export function GamesList({ games }: GamesListProps) {
                             {filter === 'open'
                                 ? 'No active games at the moment'
                                 : filter === 'closed'
-                                ? 'No closed games yet'
-                                : 'Create your first game to get started'}
+                                  ? 'No closed games yet'
+                                  : 'Create your first game to get started'}
                         </p>
                     </CardContent>
                 </Card>
@@ -128,8 +128,8 @@ export function GamesList({ games }: GamesListProps) {
                                                     game.deltaCents === 0
                                                         ? 'text-muted-foreground'
                                                         : game.deltaCents > 0
-                                                        ? 'text-green-600 dark:text-green-400'
-                                                        : 'text-red-600 dark:text-red-400'
+                                                          ? 'text-green-600 dark:text-green-400'
+                                                          : 'text-red-600 dark:text-red-400'
                                                 }`}
                                             >
                                                 {game.deltaCents === 0
@@ -152,7 +152,7 @@ export function GamesList({ games }: GamesListProps) {
                                                 : 'outline'
                                         }
                                     >
-                                        <Link href={`/game/${game.id}`}>
+                                        <Link href={`/games/${game.id}`}>
                                             {game.status === 'OPEN'
                                                 ? 'Open Cashier'
                                                 : 'View Results'}

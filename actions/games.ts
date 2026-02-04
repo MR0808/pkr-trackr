@@ -109,3 +109,779 @@ export async function loadGamesForGroup(opts: {
         };
     });
 }
+
+// Load a single game with players and synthesized transactions, converting cents -> dollars
+import type {
+    Game as GameView,
+    Transaction as Txn,
+    GameTotals
+} from '@/types/games';
+
+export async function loadGame(
+    gameId: string
+): Promise<{ game: GameView | null; totals: GameTotals | null }> {
+    if (!gameId) throw new Error('gameId is required');
+
+    const game = await prisma.game.findUnique({
+        where: { id: gameId },
+        include: {
+            players: {
+                include: { player: true }
+            }
+        }
+    });
+
+    if (!game) return { game: null, totals: null };
+
+    // Map GamePlayer -> Player (UI-friendly numbers: dollars)
+    const players = game.players.map((gp) => {
+        const buyInsTotal = Math.round(gp.buyInCents / 100);
+        const cashout =
+            gp.cashOutCents === null ? null : Math.round(gp.cashOutCents / 100);
+        const adjustmentsTotal = Math.round(gp.adjustmentCents / 100);
+        const net = buyInsTotal + adjustmentsTotal - (cashout || 0);
+
+        return {
+            id: gp.player.id,
+            name: gp.player.name,
+            buyInsTotal,
+            cashout,
+            adjustmentsTotal,
+            net
+        };
+    });
+
+    // Synthesize transactions from per-player aggregates (one entry per type)
+    const transactions: Txn[] = [];
+
+    for (const gp of game.players) {
+        const playerName = gp.player.name;
+        const buyInsAmount = Math.round(gp.buyInCents / 100);
+        const adjustmentsAmount = Math.round(gp.adjustmentCents / 100);
+        const cashoutAmount =
+            gp.cashOutCents === null ? null : Math.round(gp.cashOutCents / 100);
+
+        const timestamp = gp.updatedAt || gp.createdAt;
+
+        if (buyInsAmount > 0) {
+            transactions.push({
+                id: `gp-${gp.id}-buyin`,
+                playerId: gp.playerId,
+                playerName,
+                type: 'BUY_IN',
+                amount: buyInsAmount,
+                timestamp
+            });
+        }
+
+        if (adjustmentsAmount !== 0) {
+            transactions.push({
+                id: `gp-${gp.id}-adjust`,
+                playerId: gp.playerId,
+                playerName,
+                type: 'ADJUSTMENT',
+                amount: adjustmentsAmount,
+                timestamp
+            });
+        }
+
+        if (cashoutAmount !== null) {
+            transactions.push({
+                id: `gp-${gp.id}-cashout`,
+                playerId: gp.playerId,
+                playerName,
+                type: 'CASHOUT',
+                amount: cashoutAmount,
+                timestamp
+            });
+        }
+    }
+
+    // sort by timestamp desc
+    transactions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+    const totalIn = players.reduce((sum, p) => sum + p.buyInsTotal, 0);
+    const totalOut = players.reduce((sum, p) => sum + (p.cashout || 0), 0);
+    const totals: GameTotals = {
+        totalIn,
+        totalOut,
+        bankDelta: totalIn - totalOut
+    };
+
+    const result: GameView = {
+        id: game.id,
+        name: game.name,
+        status: game.status,
+        createdAt: game.createdAt,
+        closedAt: game.closedAt,
+        players,
+        transactions
+    };
+
+    return { game: result, totals };
+}
+
+import {
+    addPlayerSchema,
+    type AddPlayerInput,
+    buyInSchema,
+    type BuyInInput,
+    cashoutSchema,
+    type CashoutInput,
+    adjustmentSchema,
+    type AdjustmentInput,
+    undoTransactionSchema,
+    type UndoTransactionInput,
+    closeGameSchema,
+    type CloseGameInput
+} from '@/schemas/games';
+
+export async function addPlayerAction(input: AddPlayerInput): Promise<{
+    success: boolean;
+    error?: string;
+    playerId?: string;
+    wasCreated?: boolean;
+    alreadyInGame?: boolean;
+}> {
+    try {
+        const data = addPlayerSchema.parse(input);
+
+        // 1) Fetch game + ensure it's open
+        const game = await prisma.game.findUnique({
+            where: { id: data.gameId },
+            select: { id: true, status: true, groupId: true }
+        });
+
+        if (!game) return { success: false, error: 'Game not found' };
+        if (game.status === 'CLOSED')
+            return { success: false, error: 'Game is closed' };
+
+        // 2) In a transaction, find or create player (case-insensitive match), then add to game
+        const result = await prisma.$transaction(async (tx) => {
+            // Try case-insensitive match to avoid dupes
+            let player = await tx.player.findFirst({
+                where: {
+                    groupId: game.groupId,
+                    name: {
+                        equals: data.name.trim(),
+                        mode: 'insensitive' as const
+                    }
+                }
+            });
+
+            let wasCreated = false;
+
+            if (!player) {
+                try {
+                    player = await tx.player.create({
+                        data: { groupId: game.groupId, name: data.name.trim() }
+                    });
+                    wasCreated = true;
+                } catch (err: any) {
+                    // Unique race: another request created it. Re-fetch.
+                    if (err?.code === 'P2002') {
+                        player = await tx.player.findFirst({
+                            where: {
+                                groupId: game.groupId,
+                                name: {
+                                    equals: data.name.trim(),
+                                    mode: 'insensitive' as const
+                                }
+                            }
+                        });
+                    } else {
+                        throw err;
+                    }
+                }
+            }
+
+            if (!player) throw new Error('Failed to resolve player');
+
+            // Check if already in game
+            const existingGP = await tx.gamePlayer.findFirst({
+                where: { gameId: data.gameId, playerId: player.id }
+            });
+
+            if (existingGP) {
+                return { playerId: player.id, wasCreated, alreadyInGame: true };
+            }
+
+            await tx.gamePlayer.create({
+                data: { gameId: data.gameId, playerId: player.id }
+            });
+
+            return { playerId: player.id, wasCreated, alreadyInGame: false };
+        });
+
+        return { success: true, ...result };
+    } catch (err: any) {
+        if (err?.name === 'ZodError' && err?.errors?.length) {
+            return { success: false, error: err.errors[0].message };
+        }
+
+        return { success: false, error: err?.message || String(err) };
+    }
+}
+
+export async function addBuyInAction(input: BuyInInput): Promise<{
+    success: boolean;
+    error?: string;
+    playerId?: string;
+    player?: {
+        id: string;
+        name: string;
+        buyInsTotal: number;
+        cashout: number | null;
+        adjustmentsTotal: number;
+        net: number;
+    };
+}> {
+    try {
+        const data = buyInSchema.parse(input);
+        const { gameId, playerId, amount } = data;
+        const amountCents = Math.round(amount * 100);
+
+        const game = await prisma.game.findUnique({
+            where: { id: gameId },
+            select: { id: true, status: true, seasonId: true }
+        });
+        if (!game) return { success: false, error: 'Game not found' };
+        if (game.status === 'CLOSED')
+            return { success: false, error: 'Game is closed' };
+
+        const result = await prisma.$transaction(async (tx) => {
+            const gp = await tx.gamePlayer.findFirst({
+                where: { gameId, playerId },
+                select: {
+                    id: true,
+                    buyInCents: true,
+                    cashOutCents: true,
+                    adjustmentCents: true,
+                    player: { select: { id: true, name: true } }
+                }
+            });
+
+            if (!gp) throw new Error('Player not in game');
+
+            await tx.gamePlayer.update({
+                where: { id: gp.id },
+                data: { buyInCents: { increment: amountCents } }
+            });
+
+            if (game.seasonId) {
+                await tx.seasonPlayerStats.upsert({
+                    where: {
+                        seasonId_playerId: { seasonId: game.seasonId, playerId }
+                    },
+                    update: { totalBuyInCents: { increment: amountCents } },
+                    create: {
+                        seasonId: game.seasonId,
+                        playerId,
+                        totalBuyInCents: amountCents,
+                        totalCashOutCents: 0,
+                        totalProfitCents: 0,
+                        totalGames: 0
+                    }
+                });
+            }
+
+            const gpFinal = await tx.gamePlayer.findUnique({
+                where: { id: gp.id },
+                include: { player: true }
+            });
+
+            const buyInsTotal = Math.round(gpFinal!.buyInCents / 100);
+            const cashout =
+                gpFinal!.cashOutCents === null
+                    ? null
+                    : Math.round(gpFinal!.cashOutCents / 100);
+            const adjustmentsTotal = Math.round(gpFinal!.adjustmentCents / 100);
+            const net = buyInsTotal + adjustmentsTotal - (cashout || 0);
+
+            return {
+                playerId,
+                player: {
+                    id: gpFinal!.player.id,
+                    name: gpFinal!.player.name,
+                    buyInsTotal,
+                    cashout,
+                    adjustmentsTotal,
+                    net
+                }
+            };
+        });
+
+        return { success: true, ...result };
+    } catch (err: any) {
+        if (err?.name === 'ZodError' && err?.errors?.length)
+            return { success: false, error: err.errors[0].message };
+        return { success: false, error: err?.message || String(err) };
+    }
+}
+
+export async function setCashoutAction(input: CashoutInput): Promise<{
+    success: boolean;
+    error?: string;
+    playerId?: string;
+    player?: {
+        id: string;
+        name: string;
+        buyInsTotal: number;
+        cashout: number | null;
+        adjustmentsTotal: number;
+        net: number;
+    };
+}> {
+    try {
+        const data = cashoutSchema.parse(input);
+        const { gameId, playerId, amount } = data;
+        const amountCents = Math.round(amount * 100);
+
+        const game = await prisma.game.findUnique({
+            where: { id: gameId },
+            select: { id: true, status: true }
+        });
+        if (!game) return { success: false, error: 'Game not found' };
+        if (game.status === 'CLOSED')
+            return { success: false, error: 'Game is closed' };
+
+        const result = await prisma.$transaction(async (tx) => {
+            const gp = await tx.gamePlayer.findFirst({
+                where: { gameId, playerId },
+                select: {
+                    id: true,
+                    buyInCents: true,
+                    cashOutCents: true,
+                    adjustmentCents: true,
+                    player: { select: { id: true, name: true } }
+                }
+            });
+
+            if (!gp) throw new Error('Player not in game');
+
+            await tx.gamePlayer.update({
+                where: { id: gp.id },
+                data: { cashOutCents: amountCents }
+            });
+
+            const gpFinal = await tx.gamePlayer.findUnique({
+                where: { id: gp.id },
+                include: { player: true }
+            });
+
+            const buyInsTotal = Math.round(gpFinal!.buyInCents / 100);
+            const cashout =
+                gpFinal!.cashOutCents === null
+                    ? null
+                    : Math.round(gpFinal!.cashOutCents / 100);
+            const adjustmentsTotal = Math.round(gpFinal!.adjustmentCents / 100);
+            const net = buyInsTotal + adjustmentsTotal - (cashout || 0);
+
+            return {
+                playerId,
+                player: {
+                    id: gpFinal!.player.id,
+                    name: gpFinal!.player.name,
+                    buyInsTotal,
+                    cashout,
+                    adjustmentsTotal,
+                    net
+                }
+            };
+        });
+
+        return { success: true, ...result };
+    } catch (err: any) {
+        if (err?.name === 'ZodError' && err?.errors?.length)
+            return { success: false, error: err.errors[0].message };
+        return { success: false, error: err?.message || String(err) };
+    }
+}
+
+export async function addAdjustmentAction(input: AdjustmentInput): Promise<{
+    success: boolean;
+    error?: string;
+    playerId?: string;
+    player?: {
+        id: string;
+        name: string;
+        buyInsTotal: number;
+        cashout: number | null;
+        adjustmentsTotal: number;
+        net: number;
+    };
+}> {
+    try {
+        const data = adjustmentSchema.parse(input);
+        const { gameId, playerId, amount } = data;
+        const amountCents = Math.round(amount * 100);
+
+        const game = await prisma.game.findUnique({
+            where: { id: gameId },
+            select: { id: true, status: true }
+        });
+        if (!game) return { success: false, error: 'Game not found' };
+        if (game.status === 'CLOSED')
+            return { success: false, error: 'Game is closed' };
+
+        const result = await prisma.$transaction(async (tx) => {
+            const gp = await tx.gamePlayer.findFirst({
+                where: { gameId, playerId },
+                select: {
+                    id: true,
+                    buyInCents: true,
+                    cashOutCents: true,
+                    adjustmentCents: true,
+                    player: { select: { id: true, name: true } }
+                }
+            });
+
+            if (!gp) throw new Error('Player not in game');
+
+            await tx.gamePlayer.update({
+                where: { id: gp.id },
+                data: { adjustmentCents: { increment: amountCents } }
+            });
+
+            const gpFinal = await tx.gamePlayer.findUnique({
+                where: { id: gp.id },
+                include: { player: true }
+            });
+
+            const buyInsTotal = Math.round(gpFinal!.buyInCents / 100);
+            const cashout =
+                gpFinal!.cashOutCents === null
+                    ? null
+                    : Math.round(gpFinal!.cashOutCents / 100);
+            const adjustmentsTotal = Math.round(gpFinal!.adjustmentCents / 100);
+            const net = buyInsTotal + adjustmentsTotal - (cashout || 0);
+
+            return {
+                playerId,
+                player: {
+                    id: gpFinal!.player.id,
+                    name: gpFinal!.player.name,
+                    buyInsTotal,
+                    cashout,
+                    adjustmentsTotal,
+                    net
+                }
+            };
+        });
+
+        return { success: true, ...result };
+    } catch (err: any) {
+        if (err?.name === 'ZodError' && err?.errors?.length)
+            return { success: false, error: err.errors[0].message };
+        return { success: false, error: err?.message || String(err) };
+    }
+}
+
+import { addPlayersSchema, type AddPlayersInput } from '@/schemas/games';
+import { Gaegu } from 'next/font/google';
+
+export async function addPlayersAction(input: AddPlayersInput): Promise<{
+    success: boolean;
+    error?: string;
+    // players added to game (newly inserted)
+    addedPlayerIds?: string[];
+    // players that were already in game
+    alreadyInGame?: string[];
+    // players created by this action
+    createdPlayerIds?: string[];
+    // provided playerIds that were invalid for the group
+    invalidPlayerIds?: string[];
+    // existing players matched from newPlayerNames
+    matchedExistingPlayers?: { name: string; playerId: string }[];
+}> {
+    try {
+        const data = addPlayersSchema.parse(input);
+
+        const { gameId, playerIds = [], newPlayerNames = [] } = data;
+
+        if (playerIds.length === 0 && newPlayerNames.length === 0) {
+            return { success: false, error: 'No players provided' };
+        }
+
+        const game = await prisma.game.findUnique({
+            where: { id: gameId },
+            select: { id: true, status: true, groupId: true }
+        });
+
+        if (!game) return { success: false, error: 'Game not found' };
+        if (game.status === 'CLOSED')
+            return { success: false, error: 'Game is closed' };
+
+        const result = await prisma.$transaction(async (tx) => {
+            const createdPlayerIds: string[] = [];
+            const matchedExistingPlayers: { name: string; playerId: string }[] =
+                [];
+
+            // 1) Validate provided playerIds (must belong to game.groupId)
+            let validProvidedPlayerIds: string[] = [];
+            if (playerIds.length > 0) {
+                const found = await tx.player.findMany({
+                    where: { id: { in: playerIds }, groupId: game.groupId },
+                    select: { id: true }
+                });
+                validProvidedPlayerIds = found.map((p) => p.id);
+            }
+
+            const invalidPlayerIds = playerIds.filter(
+                (id) => !validProvidedPlayerIds.includes(id)
+            );
+
+            if (invalidPlayerIds.length > 0) {
+                // Return early with details so client can correct selection
+                return {
+                    addedPlayerIds: [],
+                    alreadyInGame: [],
+                    createdPlayerIds: [],
+                    invalidPlayerIds
+                };
+            }
+
+            // 2) Handle newPlayerNames: dedupe and normalize
+            const nameMap = new Map<string, string>(); // key: lower -> original trimmed
+            for (const raw of newPlayerNames) {
+                const trimmed = raw.trim();
+                if (!trimmed) continue;
+                const lower = trimmed.toLowerCase();
+                if (!nameMap.has(lower)) nameMap.set(lower, trimmed);
+            }
+            const uniqueNames = Array.from(nameMap.values());
+
+            // Find existing players that match any of the new names (case-insensitive)
+            if (uniqueNames.length > 0) {
+                const orChecks = uniqueNames.map((n) => ({
+                    name: { equals: n, mode: 'insensitive' as const }
+                }));
+                const existing = await tx.player.findMany({
+                    where: { groupId: game.groupId, OR: orChecks },
+                    select: { id: true, name: true }
+                });
+
+                const existingByLower = new Map<
+                    string,
+                    { id: string; name: string }
+                >();
+                for (const ex of existing)
+                    existingByLower.set(ex.name.toLowerCase(), ex);
+
+                // For each unique name, either use existing player or create new
+                for (const name of uniqueNames) {
+                    const lower = name.toLowerCase();
+                    const match = existingByLower.get(lower);
+                    if (match) {
+                        matchedExistingPlayers.push({
+                            name,
+                            playerId: match.id
+                        });
+                    } else {
+                        // create player, handle race with P2002
+                        try {
+                            const p = await tx.player.create({
+                                data: { groupId: game.groupId, name }
+                            });
+                            createdPlayerIds.push(p.id);
+                        } catch (err: any) {
+                            if (err?.code === 'P2002') {
+                                // race: someone created it in-between, fetch it
+                                const p = await tx.player.findFirst({
+                                    where: {
+                                        groupId: game.groupId,
+                                        name: {
+                                            equals: name,
+                                            mode: 'insensitive' as const
+                                        }
+                                    }
+                                });
+                                if (p)
+                                    matchedExistingPlayers.push({
+                                        name,
+                                        playerId: p.id
+                                    });
+                                else throw err;
+                            } else {
+                                throw err;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3) Collect all player ids to add
+            const allPlayerIdsSet = new Set<string>(validProvidedPlayerIds);
+            for (const m of matchedExistingPlayers)
+                allPlayerIdsSet.add(m.playerId);
+            for (const id of createdPlayerIds) allPlayerIdsSet.add(id);
+            const allPlayerIds = Array.from(allPlayerIdsSet);
+
+            if (allPlayerIds.length === 0) {
+                return {
+                    addedPlayerIds: [],
+                    alreadyInGame: [],
+                    createdPlayerIds,
+                    matchedExistingPlayers
+                };
+            }
+
+            // 4) Determine which are already in game
+            const existingGPs = await tx.gamePlayer.findMany({
+                where: { gameId: gameId, playerId: { in: allPlayerIds } },
+                select: { playerId: true }
+            });
+            const alreadyInGame = new Set(existingGPs.map((g) => g.playerId));
+
+            const toInsert = allPlayerIds.filter(
+                (id) => !alreadyInGame.has(id)
+            );
+
+            if (toInsert.length > 0) {
+                // createMany with skipDuplicates just to be safe
+                await tx.gamePlayer.createMany({
+                    data: toInsert.map((id) => ({
+                        gameId: gameId,
+                        playerId: id
+                    })),
+                    skipDuplicates: true
+                });
+            }
+
+            return {
+                addedPlayerIds: toInsert,
+                alreadyInGame: Array.from(alreadyInGame),
+                createdPlayerIds,
+                invalidPlayerIds: [],
+                matchedExistingPlayers
+            };
+        });
+
+        return { success: true, ...result };
+    } catch (err: any) {
+        if (err?.name === 'ZodError' && err?.errors?.length) {
+            return { success: false, error: err.errors[0].message };
+        }
+        return { success: false, error: err?.message || String(err) };
+    }
+}
+
+// List players in the game's group that are not already in the game
+export async function listAvailablePlayersForGame(
+    gameId: string
+): Promise<Array<{ id: string; name: string }>> {
+    if (!gameId) throw new Error('gameId is required');
+
+    const game = await prisma.game.findUnique({
+        where: { id: gameId },
+        select: { id: true, groupId: true }
+    });
+    if (!game) return [];
+
+    const players = await prisma.player.findMany({
+        where: {
+            groupId: game.groupId,
+            AND: [{ games: { none: { gameId: gameId } } }]
+        },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true }
+    });
+
+    return players;
+}
+
+// Undo a synthesized transaction (buy-in/adjustment/cashout) by resetting
+// the corresponding per-player aggregate field. Transaction ids are in the
+// form `gp-<gamePlayerId>-buyin|adjust|cashout` as emitted by the UI.
+export async function undoTransactionAction(
+    input: UndoTransactionInput
+): Promise<{ success: boolean; error?: string; playerId?: string }> {
+    try {
+        const data = undoTransactionSchema.parse(input);
+        const { gameId, transactionId } = data;
+
+        const game = await prisma.game.findUnique({
+            where: { id: gameId },
+            select: { id: true, status: true }
+        });
+        if (!game) return { success: false, error: 'Game not found' };
+        if (game.status === 'CLOSED')
+            return { success: false, error: 'Game is closed' };
+
+        const m = transactionId.match(/^gp-(.+)-(buyin|adjust|cashout)$/);
+        if (!m) return { success: false, error: 'Invalid transaction id' };
+
+        const gpId = m[1];
+        const txType = m[2];
+
+        const gp = await prisma.gamePlayer.findUnique({
+            where: { id: gpId },
+            include: { player: true }
+        });
+
+        if (!gp) return { success: false, error: 'Transaction not found' };
+
+        await prisma.$transaction(async (tx) => {
+            if (txType === 'buyin') {
+                await tx.gamePlayer.update({
+                    where: { id: gp.id },
+                    data: { buyInCents: 0 }
+                });
+            } else if (txType === 'adjust') {
+                await tx.gamePlayer.update({
+                    where: { id: gp.id },
+                    data: { adjustmentCents: 0 }
+                });
+            } else {
+                // cashout
+                await tx.gamePlayer.update({
+                    where: { id: gp.id },
+                    data: { cashOutCents: null }
+                });
+            }
+        });
+
+        return { success: true, playerId: gp.player.id };
+    } catch (err: any) {
+        if (err?.name === 'ZodError' && err?.errors?.length)
+            return { success: false, error: err.errors[0].message };
+        return { success: false, error: err?.message || String(err) };
+    }
+}
+
+// Close a game: set status to CLOSED, set closedAt, and return a shareId for results
+export async function closeGameAction(
+    input: CloseGameInput
+): Promise<{ success: boolean; error?: string; shareId?: string }> {
+    try {
+        const data = closeGameSchema.parse(input);
+        const { gameId } = data;
+
+        const game = await prisma.game.findUnique({
+            where: { id: gameId },
+            select: { id: true, status: true, shareId: true }
+        });
+
+        if (!game) return { success: false, error: 'Game not found' };
+        if (game.status === 'CLOSED')
+            return { success: false, error: 'Game is already closed' };
+
+        let shareId = game.shareId;
+        if (!shareId) {
+            // generate a new shareId if missing
+            const { nanoid } = await import('nanoid');
+            shareId = nanoid(16);
+        }
+
+        await prisma.game.update({
+            where: { id: gameId },
+            data: { status: 'CLOSED', closedAt: new Date(), shareId }
+        });
+
+        return { success: true, shareId };
+    } catch (err: any) {
+        if (err?.name === 'ZodError' && err?.errors?.length)
+            return { success: false, error: err.errors[0].message };
+        return { success: false, error: err?.message || String(err) };
+    }
+}

@@ -1,7 +1,7 @@
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { GamesList } from '@/components/dashboard/GamesList';
+import { GamesList } from '@/components/games/list/GamesList';
 import { loadGamesForGroup } from '@/actions/games';
 
 export default async function GamesPage() {
