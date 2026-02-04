@@ -55,16 +55,14 @@ export function GamesList({ games }: GamesListProps) {
                             {filter === 'open'
                                 ? 'No active games at the moment'
                                 : filter === 'closed'
-                                  ? 'No closed games yet'
-                                  : 'Create your first game to get started'}
+                                ? 'No closed games yet'
+                                : 'Create your first game to get started'}
                         </p>
                     </CardContent>
                 </Card>
             ) : (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    {filteredGames.map((game) => {
-                        // const totals = calculateGameTotals(game);
-                        return (
+                    {filteredGames.map((game) => (
                             <Card
                                 key={game.id}
                                 className="transition-shadow hover:shadow-lg"
@@ -112,7 +110,7 @@ export function GamesList({ games }: GamesListProps) {
                                             <p className="flex items-center gap-1 text-lg font-semibold">
                                                 {/* <DollarSign className="h-4 w-4" /> */}
                                                 {formatCurrency(
-                                                    game.totalBuyInCents
+                                                    game.totalBuyInCents / 100
                                                 )}
                                             </p>
                                         </div>
@@ -128,8 +126,8 @@ export function GamesList({ games }: GamesListProps) {
                                                     game.deltaCents === 0
                                                         ? 'text-muted-foreground'
                                                         : game.deltaCents > 0
-                                                          ? 'text-green-600 dark:text-green-400'
-                                                          : 'text-red-600 dark:text-red-400'
+                                                        ? 'text-green-600 dark:text-green-400'
+                                                        : 'text-red-600 dark:text-red-400'
                                                 }`}
                                             >
                                                 {game.deltaCents === 0
@@ -137,7 +135,7 @@ export function GamesList({ games }: GamesListProps) {
                                                     : formatCurrency(
                                                           Math.abs(
                                                               game.deltaCents
-                                                          )
+                                                          ) / 100
                                                       )}
                                             </p>
                                         </div>
@@ -161,8 +159,7 @@ export function GamesList({ games }: GamesListProps) {
                                     </Button>
                                 </CardContent>
                             </Card>
-                        );
-                    })}
+                    ))}
                 </div>
             )}
         </div>
