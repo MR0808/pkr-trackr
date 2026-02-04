@@ -194,7 +194,13 @@ export function CashierClient({ game }: CashierClientProps) {
                                 (p) =>
                                     !game.players.some((gp) => gp.id === p.id)
                             )
-                        ].map((player) => (
+                        ]
+                            .sort((a, b) =>
+                                a.name.localeCompare(b.name, undefined, {
+                                    sensitivity: 'base'
+                                })
+                            )
+                            .map((player) => (
                             <PlayerCard
                                 key={player.id}
                                 player={player}

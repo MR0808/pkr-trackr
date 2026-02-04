@@ -137,6 +137,10 @@ export function AddPlayerDialog({
                 return;
             }
 
+            // Clear optimistic players so we don't show duplicates after refresh.
+            // Refresh will replace with server data (real ids).
+            onOptimisticRevert?.(optimisticPlayers.map((p) => p.id));
+
             const parts: string[] = [];
             if (result.addedPlayerIds && result.addedPlayerIds.length > 0)
                 parts.push(`${result.addedPlayerIds.length} added`);

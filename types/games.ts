@@ -18,6 +18,7 @@ export interface Game {
     closedAt: Date | null;
     players: Player[];
     transactions: Transaction[];
+    scheduledAt: Date;
 }
 
 export interface Transaction {

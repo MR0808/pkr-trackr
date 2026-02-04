@@ -99,8 +99,9 @@ export function AmountDialog({
     }, [open, numericAmount, onOptimisticRevert]);
 
     const handleSubmit = () => {
-        if (!numericAmount && mode !== 'adjustment') return;
-        if (mode === 'adjustment' && numericAmount === 0) return;
+        if (mode === 'buy-in' && !numericAmount) return;
+        if (mode === 'cashout' && amount === '') return; // allow 0 for bust-out
+        if (mode === 'adjustment' && (numericAmount === 0 || !amount)) return;
 
         // Apply optimistic callback for buy-ins to update the PlayerCard immediately
         if (mode === 'buy-in') {
@@ -293,7 +294,13 @@ export function AmountDialog({
                         <Button
                             type="button"
                             onClick={handleSubmit}
-                            disabled={isPending || numericAmount === 0}
+                            disabled={
+                                isPending ||
+                                (mode === 'buy-in' && numericAmount === 0) ||
+                                (mode === 'adjustment' &&
+                                    (numericAmount === 0 || !amount)) ||
+                                (mode === 'cashout' && amount === '')
+                            }
                             className="flex-1"
                         >
                             {isPending ? 'Processing...' : 'Confirm'}

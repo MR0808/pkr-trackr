@@ -16,30 +16,20 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { getAllGames, calculateGameTotals } from '@/lib/mock-db';
+import { loadGamesForGroup } from '@/actions/games';
 import { formatCurrency } from '@/lib/money';
 import { format } from 'date-fns';
 
-export default function DashboardPage() {
-    const games = getAllGames();
+const DEFAULT_GROUP_ID = 'cml531khu0000kgf58q0meaku';
+
+export default async function DashboardPage() {
+    const games = await loadGamesForGroup({ groupId: DEFAULT_GROUP_ID });
     const openGames = games.filter((g) => g.status === 'OPEN');
     const closedGames = games.filter((g) => g.status === 'CLOSED');
 
-    // Calculate overall stats
-    const totalMoneyIn = games.reduce((sum, game) => {
-        const totals = calculateGameTotals(game);
-        return sum + totals.totalIn;
-    }, 0);
-
-    const totalMoneyOut = games.reduce((sum, game) => {
-        const totals = calculateGameTotals(game);
-        return sum + totals.totalOut;
-    }, 0);
-
-    const uniquePlayers = new Set<string>();
-    games.forEach((game) => {
-        game.players.forEach((player) => uniquePlayers.add(player.name));
-    });
+    const totalMoneyIn = games.reduce((sum, g) => sum + g.totalBuyInCents / 100, 0);
+    const totalMoneyOut = games.reduce((sum, g) => sum + g.totalCashOutCents / 100, 0);
+    const totalPlayerEntries = games.reduce((sum, g) => sum + g.playerCount, 0);
 
     const recentGames = games.slice(0, 5);
 
@@ -84,13 +74,13 @@ export default function DashboardPage() {
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">
-                            Unique Players
+                            Player entries
                         </CardTitle>
                         <Users className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">
-                            {uniquePlayers.size}
+                            {totalPlayerEntries}
                         </div>
                         <p className="text-xs text-muted-foreground">
                             Across all games
@@ -144,7 +134,7 @@ export default function DashboardPage() {
                             </CardDescription>
                         </div>
                         <Button asChild variant="ghost" size="sm">
-                            <Link href="/dashboard/games">
+                            <Link href="/games">
                                 View All
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Link>
@@ -168,55 +158,53 @@ export default function DashboardPage() {
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {recentGames.map((game) => {
-                                const totals = calculateGameTotals(game);
-                                return (
-                                    <div
-                                        key={game.id}
-                                        className="flex flex-col gap-4 rounded-lg border p-4 transition-colors hover:bg-accent sm:flex-row sm:items-center sm:justify-between"
-                                    >
-                                        <div className="space-y-1">
-                                            <div className="flex items-center gap-2">
-                                                <h3 className="font-semibold">
-                                                    {game.name}
-                                                </h3>
-                                                <Badge
-                                                    variant={
-                                                        game.status === 'OPEN'
-                                                            ? 'default'
-                                                            : 'secondary'
-                                                    }
-                                                    className="text-xs"
-                                                >
-                                                    {game.status}
-                                                </Badge>
-                                            </div>
-                                            <p className="text-sm text-muted-foreground">
-                                                {format(
-                                                    new Date(game.createdAt),
-                                                    'MMM d, yyyy'
-                                                )}{' '}
-                                                • {game.players.length} players
-                                                •{' '}
-                                                {formatCurrency(totals.totalIn)}{' '}
-                                                in
-                                            </p>
+                            {recentGames.map((game) => (
+                                <div
+                                    key={game.id}
+                                    className="flex flex-col gap-4 rounded-lg border p-4 transition-colors hover:bg-accent sm:flex-row sm:items-center sm:justify-between"
+                                >
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="font-semibold">
+                                                {game.name}
+                                            </h3>
+                                            <Badge
+                                                variant={
+                                                    game.status === 'OPEN'
+                                                        ? 'default'
+                                                        : 'secondary'
+                                                }
+                                                className="text-xs"
+                                            >
+                                                {game.status}
+                                            </Badge>
                                         </div>
-                                        <Button
-                                            asChild
-                                            variant="outline"
-                                            size="sm"
-                                        >
-                                            <Link href={`/game/${game.id}`}>
-                                                {game.status === 'OPEN'
-                                                    ? 'Open'
-                                                    : 'View'}
-                                                <ArrowRight className="ml-2 h-4 w-4" />
-                                            </Link>
-                                        </Button>
+                                        <p className="text-sm text-muted-foreground">
+                                            {format(
+                                                new Date(game.scheduledAt),
+                                                'MMM d, yyyy'
+                                            )}{' '}
+                                            • {game.playerCount} players •{' '}
+                                            {formatCurrency(
+                                                game.totalBuyInCents / 100
+                                            )}{' '}
+                                            in
+                                        </p>
                                     </div>
-                                );
-                            })}
+                                    <Button
+                                        asChild
+                                        variant="outline"
+                                        size="sm"
+                                    >
+                                        <Link href={`/games/${game.id}`}>
+                                            {game.status === 'OPEN'
+                                                ? 'Open'
+                                                : 'View'}
+                                            <ArrowRight className="ml-2 h-4 w-4" />
+                                        </Link>
+                                    </Button>
+                                </div>
+                            ))}
                         </div>
                     )}
                 </CardContent>

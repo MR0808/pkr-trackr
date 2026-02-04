@@ -36,11 +36,30 @@ function TotalsTile({ label, amount, variant = 'default' }: TotalsTileProps) {
     );
 }
 
-interface TotalsBarProps {
-    totals: GameTotals;
+interface CountTileProps {
+    label: string;
+    count: number;
 }
 
-export function TotalsBar({ totals }: TotalsBarProps) {
+function CountTile({ label, count }: CountTileProps) {
+    return (
+        <Card className="flex min-h-21 flex-col justify-center p-4 lg:p-5">
+            <div className="text-sm text-muted-foreground lg:text-base">
+                {label}
+            </div>
+            <div className="tabular-nums text-xl font-semibold lg:text-2xl">
+                {count}
+            </div>
+        </Card>
+    );
+}
+
+interface TotalsBarProps {
+    totals: GameTotals;
+    playerCount?: number;
+}
+
+export function TotalsBar({ totals, playerCount }: TotalsBarProps) {
     const bankDeltaVariant =
         totals.bankDelta === 0
             ? 'success'
@@ -55,8 +74,14 @@ export function TotalsBar({ totals }: TotalsBarProps) {
               ? 'Cash Remaining'
               : 'Overpaid';
 
+    const hasPlayerCount = playerCount !== undefined;
     return (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:gap-4">
+        <div
+            className={cn(
+                'grid grid-cols-1 gap-3 md:grid-cols-2 lg:gap-4',
+                hasPlayerCount ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
+            )}
+        >
             <TotalsTile label="Total In" amount={totals.totalIn} />
             <TotalsTile label="Total Out" amount={totals.totalOut} />
             <TotalsTile
@@ -64,6 +89,9 @@ export function TotalsBar({ totals }: TotalsBarProps) {
                 amount={totals.bankDelta}
                 variant={bankDeltaVariant}
             />
+            {playerCount !== undefined && (
+                <CountTile label="Players" count={playerCount} />
+            )}
         </div>
     );
 }

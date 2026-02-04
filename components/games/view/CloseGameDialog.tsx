@@ -56,7 +56,7 @@ export function CloseGameDialog({
                         'The game has been closed and results are ready to share'
                 });
                 setOpen(false);
-                router.push(`/r/${result.shareId}`);
+                router.push(`/games/${gameId}/results`);
             } else {
                 toast.error('Error', {
                     description: result.error || 'Failed to close game'
@@ -111,7 +111,11 @@ export function CloseGameDialog({
                             htmlFor={`confirm-close-${gameId}`}
                             className="text-sm font-medium"
                         >
-                            Type <span className="font-mono font-semibold">CLOSE</span> to confirm
+                            Type{' '}
+                            <span className="font-mono font-semibold">
+                                CLOSE
+                            </span>{' '}
+                            to confirm
                         </Label>
                         <Input
                             id={`confirm-close-${gameId}`}
@@ -133,9 +137,7 @@ export function CloseGameDialog({
                         onClick={handleClose}
                         disabled={isPending || !isConfirmed}
                         title={
-                            !isConfirmed
-                                ? 'Type CLOSE to confirm'
-                                : undefined
+                            !isConfirmed ? 'Type CLOSE to confirm' : undefined
                         }
                     >
                         {isPending ? 'Closing...' : 'Close & Generate Results'}

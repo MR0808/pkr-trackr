@@ -1,11 +1,10 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { getGame, calculateGameTotals } from '@/lib/mock-db';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { TotalsBar } from '@/components/games/view/TotalsBar';
-// import { CloseGameDialog } from '@/components/games/view/CloseGameDialog';
+import { CloseGameDialog } from '@/components/games/view/CloseGameDialog';
 import { CashierClient } from '@/components/games/view/CashierClient';
 import { loadGame } from '@/actions/games';
 
@@ -35,7 +34,7 @@ export default async function CashierPage({ params }: CashierPageProps) {
                             size="sm"
                             className="w-fit"
                         >
-                            <Link href="/dashboard">
+                            <Link href="/">
                                 <ArrowLeft className="mr-2 h-4 w-4" />
                                 Back to Dashboard
                             </Link>
@@ -56,11 +55,11 @@ export default async function CashierPage({ params }: CashierPageProps) {
                                     {game.status}
                                 </Badge>
                             </div>
-                            {/* <CloseGameDialog
+                            <CloseGameDialog
                                 gameId={game.id}
                                 totals={totals}
                                 isGameClosed={game.status === 'CLOSED'}
-                            /> */}
+                            />
                         </div>
                     </div>
                 </div>

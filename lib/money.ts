@@ -14,6 +14,14 @@ export function formatCurrencyWithSign(amount: number): string {
     return formatted;
 }
 
+export function formatPercent(value: number, decimals = 1): string {
+    return new Intl.NumberFormat('en-US', {
+        style: 'percent',
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    }).format(value);
+}
+
 export function parseCurrencyInput(input: string): number {
     // Remove all non-digit characters
     const cleaned = input.replace(/\D/g, '');

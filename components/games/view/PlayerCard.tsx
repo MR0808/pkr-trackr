@@ -56,13 +56,15 @@ export function PlayerCard({
     const [isPending, startTransition] = useTransition();
 
     // Derive displayed values from either optimistic overrides (provided by parent)
-    // or authoritative server props.
+    // or authoritative server props. net = result = cashout - buyin (positive = won)
     const effectiveBuyInsTotal =
         optimisticOverride?.buyInsTotal ?? player.buyInsTotal;
     const effectiveCashout = optimisticOverride?.cashout ?? player.cashout;
     const effectiveAdjustmentsTotal =
         optimisticOverride?.adjustmentsTotal ?? player.adjustmentsTotal;
-    const effectiveNet = optimisticOverride?.net ?? player.net;
+    const effectiveNet =
+        optimisticOverride?.net ??
+        (effectiveCashout ?? 0) - effectiveBuyInsTotal - effectiveAdjustmentsTotal;
 
     const handlePresetBuyIn = (amount: number) => {
         // Ask parent to apply an optimistic update (fast UI) before the server round-trip
@@ -144,7 +146,7 @@ export function PlayerCard({
                         netColor
                     )}
                 >
-                    {formatCurrencyWithSign(player.net)}
+                    {formatCurrencyWithSign(effectiveNet)}
                 </div>
                 <div className="mt-0.5 space-y-0.5 text-sm text-muted-foreground lg:text-sm">
                     <div>

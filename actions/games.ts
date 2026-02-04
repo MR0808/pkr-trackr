@@ -117,9 +117,22 @@ import type {
     GameTotals
 } from '@/types/games';
 
-export async function loadGame(
-    gameId: string
-): Promise<{ game: GameView | null; totals: GameTotals | null }> {
+export async function loadGameByShareId(shareId: string): Promise<{
+    game: GameView | null;
+    totals: GameTotals | null;
+    shareId: string | null;
+}> {
+    if (!shareId) throw new Error('shareId is required');
+    const game = await prisma.game.findUnique({ where: { shareId } });
+    if (!game) return { game: null, totals: null, shareId: null };
+    return loadGame(game.id);
+}
+
+export async function loadGame(gameId: string): Promise<{
+    game: GameView | null;
+    totals: GameTotals | null;
+    shareId: string | null;
+}> {
     if (!gameId) throw new Error('gameId is required');
 
     const game = await prisma.game.findUnique({
@@ -131,15 +144,16 @@ export async function loadGame(
         }
     });
 
-    if (!game) return { game: null, totals: null };
+    if (!game) return { game: null, totals: null, shareId: null };
 
     // Map GamePlayer -> Player (UI-friendly numbers: dollars)
+    // net = result = cashout - buyin (positive = won, negative = lost)
     const players = game.players.map((gp) => {
         const buyInsTotal = Math.round(gp.buyInCents / 100);
         const cashout =
             gp.cashOutCents === null ? null : Math.round(gp.cashOutCents / 100);
         const adjustmentsTotal = Math.round(gp.adjustmentCents / 100);
-        const net = buyInsTotal + adjustmentsTotal - (cashout || 0);
+        const net = (cashout ?? 0) - buyInsTotal - adjustmentsTotal;
 
         return {
             id: gp.player.id,
@@ -214,11 +228,12 @@ export async function loadGame(
         status: game.status,
         createdAt: game.createdAt,
         closedAt: game.closedAt,
+        scheduledAt: game.scheduledAt,
         players,
         transactions
     };
 
-    return { game: result, totals };
+    return { game: result, totals, shareId: game.shareId };
 }
 
 import {
@@ -396,7 +411,7 @@ export async function addBuyInAction(input: BuyInInput): Promise<{
                     ? null
                     : Math.round(gpFinal!.cashOutCents / 100);
             const adjustmentsTotal = Math.round(gpFinal!.adjustmentCents / 100);
-            const net = buyInsTotal + adjustmentsTotal - (cashout || 0);
+            const net = (cashout ?? 0) - buyInsTotal - adjustmentsTotal;
 
             return {
                 playerId,
@@ -475,7 +490,7 @@ export async function setCashoutAction(input: CashoutInput): Promise<{
                     ? null
                     : Math.round(gpFinal!.cashOutCents / 100);
             const adjustmentsTotal = Math.round(gpFinal!.adjustmentCents / 100);
-            const net = buyInsTotal + adjustmentsTotal - (cashout || 0);
+            const net = (cashout ?? 0) - buyInsTotal - adjustmentsTotal;
 
             return {
                 playerId,
@@ -554,7 +569,7 @@ export async function addAdjustmentAction(input: AdjustmentInput): Promise<{
                     ? null
                     : Math.round(gpFinal!.cashOutCents / 100);
             const adjustmentsTotal = Math.round(gpFinal!.adjustmentCents / 100);
-            const net = buyInsTotal + adjustmentsTotal - (cashout || 0);
+            const net = (cashout ?? 0) - buyInsTotal - adjustmentsTotal;
 
             return {
                 playerId,
@@ -870,7 +885,7 @@ export async function closeGameAction(
         if (!shareId) {
             // generate a new shareId if missing
             const { nanoid } = await import('nanoid');
-            shareId = nanoid(16);
+            shareId = nanoid(6);
         }
 
         await prisma.game.update({

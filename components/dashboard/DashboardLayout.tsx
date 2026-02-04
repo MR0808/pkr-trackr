@@ -53,7 +53,7 @@ function SidebarContent() {
             {/* Logo */}
             <div className="border-b p-6">
                 <Link
-                    href="/dashboard"
+                    href="/"
                     className="flex items-center justify-center"
                 >
                     <Image

@@ -3,10 +3,12 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { GamesList } from '@/components/games/list/GamesList';
 import { loadGamesForGroup } from '@/actions/games';
+import { prisma } from '@/lib/prisma';
 
 export default async function GamesPage() {
+    const groupId = await prisma.group.findMany();
     const games = await loadGamesForGroup({
-        groupId: 'cml531khu0000kgf58q0meaku'
+        groupId: groupId[0].id
     });
 
     return (

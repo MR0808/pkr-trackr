@@ -81,7 +81,8 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
             const existing = s.optimisticOverrides[playerId] ?? {};
             const currentBuyIns = existing.buyInsTotal ?? 0;
             const updatedBuyIns = currentBuyIns + amount;
-            const updatedNet = (existing.net ?? 0) + amount;
+            // net = cashout - buyin; adding buy-in decreases net
+            const updatedNet = (existing.net ?? 0) - amount;
             return {
                 optimisticOverrides: {
                     ...s.optimisticOverrides,
