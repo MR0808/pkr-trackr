@@ -133,13 +133,46 @@ export type PlayerRecentGame = {
     cashOutCents: number | null;
     profitCents: number;
     nightScore: number;
-    rank: number; // 1 = first by profit that night
-    roi: number | null; // profitCents / buyInCents for this night
-    tableShare: number | null; // buyInCents / totalPotCents for this night
+    rank: number;
+    roi: number | null;
+    tableShare: number | null;
+    /** Total pot (all buy-ins) for this night */
+    totalPotCents: number;
+    seasonId: string | null;
+    seasonName: string | null;
+};
+
+export type PlayerSeasonResult = {
+    seasonId: string | null;
+    seasonName: string;
+    nightsPlayed: number;
+    totalBuyInCents: number;
+    totalCashOutCents: number;
+    totalProfitCents: number;
+    roi: number | null;
+    performanceScore: number | null;
+    avgTableShare: number | null;
+};
+
+export type PlayerBestWorstNight = {
+    gameId: string;
+    gameName: string;
+    scheduledAt: Date;
+    buyInCents: number;
+    cashOutCents: number | null;
+    profitCents: number;
+    roi: number | null;
+    tableShare: number | null;
+    totalPotCents: number;
 };
 
 export type PlayerProfileData = {
-    player: { id: string; name: string };
+    player: {
+        id: string;
+        name: string;
+        fullName: string; // firstName + lastName from user, or name
+        image: string | null;
+    };
     totalGames: number;
     totalBuyInCents: number;
     totalProfitCents: number;
@@ -148,13 +181,18 @@ export type PlayerProfileData = {
     podiumPoints: number;
     winRate: number;
     nightsInProfit: number;
-    /** Current streak: positive = wins, negative = losses (from most recent game) */
     currentStreak: number;
-    /** Longest consecutive winning streak (all-time) */
     longestWinStreak: number;
-    /** Longest consecutive losing streak (all-time) */
     longestLoseStreak: number;
+    /** Current season (season of most recent game); null if no games */
+    currentSeason: { id: string; name: string } | null;
+    /** Profit and ROI for current season only */
+    currentSeasonProfitCents: number;
+    currentSeasonRoi: number | null;
     recentGames: PlayerRecentGame[];
+    seasonResults: PlayerSeasonResult[];
+    bestNight: PlayerBestWorstNight | null;
+    worstNight: PlayerBestWorstNight | null;
 };
 
 /** Load one player's profile (must belong to default group). */
@@ -165,7 +203,13 @@ export async function loadPlayerProfile(
 
     const player = await prisma.player.findFirst({
         where: { id: playerId, groupId },
-        select: { id: true, name: true }
+        select: {
+            id: true,
+            name: true,
+            user: {
+                select: { firstName: true, lastName: true, image: true }
+            }
+        }
     });
     if (!player) return null;
 
@@ -181,6 +225,8 @@ export async function loadPlayerProfile(
                     id: true,
                     name: true,
                     scheduledAt: true,
+                    seasonId: true,
+                    season: { select: { id: true, name: true } },
                     players: {
                         select: {
                             playerId: true,
@@ -241,13 +287,165 @@ export async function loadPlayerProfile(
             nightScore: score,
             rank,
             roi,
-            tableShare
+            tableShare,
+            totalPotCents: totalPotCents,
+            seasonId: g.seasonId,
+            seasonName: g.season?.name ?? null
         });
     }
 
     const roi =
         totalBuyInCents > 0 ? totalProfitCents / totalBuyInCents : null;
     const winRate = totalGames > 0 ? nightsWon / totalGames : 0;
+
+    // Per-season aggregates
+    const seasonMap = new Map<
+        string,
+        {
+            seasonName: string;
+            nightsPlayed: number;
+            totalBuyInCents: number;
+            totalCashOutCents: number;
+            totalProfitCents: number;
+            tableShareSum: number;
+            tableShareCount: number;
+        }
+    >();
+    for (const g of allGames) {
+        const key = g.seasonId ?? 'all';
+        const label = g.seasonName ?? 'No season';
+        let rec = seasonMap.get(key);
+        if (!rec) {
+            rec = {
+                seasonName: label,
+                nightsPlayed: 0,
+                totalBuyInCents: 0,
+                totalCashOutCents: 0,
+                totalProfitCents: 0,
+                tableShareSum: 0,
+                tableShareCount: 0
+            };
+            seasonMap.set(key, rec);
+        }
+        rec.nightsPlayed += 1;
+        rec.totalBuyInCents += g.buyInCents;
+        rec.totalCashOutCents += g.cashOutCents ?? 0;
+        rec.totalProfitCents += g.profitCents;
+        if (g.tableShare != null) {
+            rec.tableShareSum += g.tableShare;
+            rec.tableShareCount += 1;
+        }
+    }
+    const seasonResults: PlayerSeasonResult[] = [];
+    for (const [sid, rec] of seasonMap) {
+        const perfScore =
+            rec.totalBuyInCents > 0
+                ? nightScore(rec.totalProfitCents, rec.totalBuyInCents)
+                : null;
+        seasonResults.push({
+            seasonId: sid === 'all' ? null : sid,
+            seasonName: rec.seasonName,
+            nightsPlayed: rec.nightsPlayed,
+            totalBuyInCents: rec.totalBuyInCents,
+            totalCashOutCents: rec.totalCashOutCents,
+            totalProfitCents: rec.totalProfitCents,
+            roi:
+                rec.totalBuyInCents > 0
+                    ? rec.totalProfitCents / rec.totalBuyInCents
+                    : null,
+            performanceScore: perfScore,
+            avgTableShare:
+                rec.tableShareCount > 0
+                    ? rec.tableShareSum / rec.tableShareCount
+                    : null
+        });
+    }
+    const totalCashOutCents = totalBuyInCents + totalProfitCents;
+    const allTimeTableShareSum = allGames.reduce(
+        (s, g) => s + (g.tableShare ?? 0),
+        0
+    );
+    const allTimeTableShareCount = allGames.filter(
+        (g) => g.tableShare != null
+    ).length;
+    seasonResults.push({
+        seasonId: null,
+        seasonName: 'All time',
+        nightsPlayed: totalGames,
+        totalBuyInCents,
+        totalCashOutCents,
+        totalProfitCents,
+        roi,
+        performanceScore:
+            totalBuyInCents > 0
+                ? nightScore(totalProfitCents, totalBuyInCents)
+                : null,
+        avgTableShare:
+            allTimeTableShareCount > 0
+                ? allTimeTableShareSum / allTimeTableShareCount
+                : null
+    });
+    seasonResults.sort((a, b) => b.nightsPlayed - a.nightsPlayed);
+
+    const currentSeason =
+        allGames.length > 0 && allGames[0].seasonId && allGames[0].seasonName
+            ? { id: allGames[0].seasonId, name: allGames[0].seasonName }
+            : null;
+    const currentSeasonGames = currentSeason
+        ? allGames.filter((g) => g.seasonId === currentSeason.id)
+        : [];
+    const currentSeasonProfitCents = currentSeasonGames.reduce(
+        (s, g) => s + g.profitCents,
+        0
+    );
+    const currentSeasonBuyIn = currentSeasonGames.reduce(
+        (s, g) => s + g.buyInCents,
+        0
+    );
+    const currentSeasonRoi =
+        currentSeasonBuyIn > 0
+            ? currentSeasonProfitCents / currentSeasonBuyIn
+            : null;
+
+    const bestGame = allGames.reduce((best, g) =>
+        g.profitCents > (best?.profitCents ?? -Infinity) ? g : best
+    );
+    const worstGame = allGames.reduce((worst, g) =>
+        g.profitCents < (worst?.profitCents ?? Infinity) ? g : worst
+    );
+    const bestNight: PlayerBestWorstNight | null =
+        bestGame && bestGame.profitCents > 0
+            ? {
+                  gameId: bestGame.gameId,
+                  gameName: bestGame.gameName,
+                  scheduledAt: bestGame.scheduledAt,
+                  buyInCents: bestGame.buyInCents,
+                  cashOutCents: bestGame.cashOutCents,
+                  profitCents: bestGame.profitCents,
+                  roi: bestGame.roi,
+                  tableShare: bestGame.tableShare,
+                  totalPotCents: bestGame.totalPotCents
+              }
+            : null;
+    const worstNight: PlayerBestWorstNight | null =
+        worstGame && worstGame.profitCents < 0
+            ? {
+                  gameId: worstGame.gameId,
+                  gameName: worstGame.gameName,
+                  scheduledAt: worstGame.scheduledAt,
+                  buyInCents: worstGame.buyInCents,
+                  cashOutCents: worstGame.cashOutCents,
+                  profitCents: worstGame.profitCents,
+                  roi: worstGame.roi,
+                  tableShare: worstGame.tableShare,
+                  totalPotCents: worstGame.totalPotCents
+              }
+            : null;
+
+    const fullName =
+        player.user?.firstName && player.user?.lastName
+            ? `${player.user.firstName} ${player.user.lastName}`.trim()
+            : player.name;
 
     // Current streak (from most recent game)
     let currentStreak = 0;
@@ -282,7 +480,12 @@ export async function loadPlayerProfile(
     }
 
     return {
-        player: { id: player.id, name: player.name },
+        player: {
+            id: player.id,
+            name: player.name,
+            fullName,
+            image: player.user?.image ?? null
+        },
         totalGames,
         totalBuyInCents,
         totalProfitCents,
@@ -294,6 +497,12 @@ export async function loadPlayerProfile(
         currentStreak,
         longestWinStreak,
         longestLoseStreak,
-        recentGames: allGames
+        currentSeason,
+        currentSeasonProfitCents,
+        currentSeasonRoi,
+        recentGames: allGames,
+        seasonResults,
+        bestNight,
+        worstNight
     };
 }

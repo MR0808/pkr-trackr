@@ -16,13 +16,23 @@ export default async function PlayerProfilePage({
     if (!data) notFound();
 
     return (
-        <div className="container mx-auto max-w-4xl space-y-6 px-4 py-4 sm:px-6 sm:py-6">
-            <Button variant="ghost" size="sm" asChild>
-                <Link href="/players" className="gap-2">
-                    <ArrowLeft className="h-4 w-4" />
-                    Back to players
-                </Link>
-            </Button>
+        <div className="container mx-auto max-w-5xl space-y-6 px-4 py-4 sm:px-6 sm:py-6">
+            <div className="flex flex-wrap items-center gap-2">
+                <Button variant="ghost" size="sm" asChild>
+                    <Link href="/" className="gap-2">
+                        <ArrowLeft className="h-4 w-4" />
+                        Back to dashboard
+                    </Link>
+                </Button>
+                <Button variant="ghost" size="sm" asChild>
+                    <Link href="/players" className="gap-2">
+                        Back to players
+                    </Link>
+                </Button>
+                <Button variant="ghost" size="sm" asChild>
+                    <Link href="/games">View all games</Link>
+                </Button>
+            </div>
 
             <PlayerProfile data={data} />
         </div>
