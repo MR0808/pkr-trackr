@@ -2,7 +2,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { loadPlayerProfile } from '@/actions/playerActions';
+import {
+    loadPlayerProfile,
+    loadPlayerComparison
+} from '@/actions/playerActions';
 import { PlayerProfile } from '@/components/players/PlayerProfile';
 
 export default async function PlayerProfilePage({
@@ -14,6 +17,11 @@ export default async function PlayerProfilePage({
     const data = await loadPlayerProfile(playerId);
 
     if (!data) notFound();
+
+    const comparison =
+        data.currentSeason?.id != null
+            ? await loadPlayerComparison(playerId, data.currentSeason.id)
+            : await loadPlayerComparison(playerId, null);
 
     return (
         <div className="container mx-auto max-w-5xl space-y-6 px-4 py-4 sm:px-6 sm:py-6">
@@ -34,7 +42,7 @@ export default async function PlayerProfilePage({
                 </Button>
             </div>
 
-            <PlayerProfile data={data} />
+            <PlayerProfile data={data} comparison={comparison} />
         </div>
     );
 }

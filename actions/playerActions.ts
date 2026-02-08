@@ -506,3 +506,159 @@ export async function loadPlayerProfile(
         worstNight
     };
 }
+
+// --- Player rank & comparison (social) ---
+
+export type PlayerRankRow = {
+    rank: number;
+    playerId: string;
+    name: string;
+    totalProfitCents: number;
+    roi: number | null;
+};
+
+export type PlayerComparisonData = {
+    currentSeasonName: string | null;
+    currentSeasonRank: number | null;
+    currentSeasonTotalPlayers: number;
+    allTimeRank: number | null;
+    allTimeTotalPlayers: number;
+    topPlayersCurrentSeason: PlayerRankRow[];
+    topPlayersAllTime: PlayerRankRow[];
+};
+
+/** Load league-wide ranks and top players for comparison. Uses currentSeasonId from profile. */
+export async function loadPlayerComparison(
+    playerId: string,
+    currentSeasonId: string | null
+): Promise<PlayerComparisonData | null> {
+    const groupId = await getDefaultGroupId();
+
+    const player = await prisma.player.findFirst({
+        where: { id: playerId, groupId },
+        select: { id: true }
+    });
+    if (!player) return null;
+
+    const games = await prisma.game.findMany({
+        where: { groupId, status: 'CLOSED' },
+        orderBy: { scheduledAt: 'asc' },
+        select: {
+            seasonId: true,
+            players: {
+                select: {
+                    playerId: true,
+                    buyInCents: true,
+                    cashOutCents: true,
+                    adjustmentCents: true,
+                    player: { select: { name: true } }
+                }
+            }
+        }
+    });
+
+    type Agg = { name: string; totalProfitCents: number; totalBuyInCents: number };
+    const allTimeByPlayer = new Map<string, Agg>();
+    const seasonByPlayer = new Map<string, Agg>();
+
+    for (const g of games) {
+        for (const gp of g.players) {
+            const cash = gp.cashOutCents ?? 0;
+            const profitCents = cash - gp.buyInCents - gp.adjustmentCents;
+
+            let allRec = allTimeByPlayer.get(gp.playerId);
+            if (!allRec) {
+                allRec = {
+                    name: gp.player.name,
+                    totalProfitCents: 0,
+                    totalBuyInCents: 0
+                };
+                allTimeByPlayer.set(gp.playerId, allRec);
+            }
+            allRec.totalProfitCents += profitCents;
+            allRec.totalBuyInCents += gp.buyInCents;
+
+            if (currentSeasonId && g.seasonId === currentSeasonId) {
+                let seaRec = seasonByPlayer.get(gp.playerId);
+                if (!seaRec) {
+                    seaRec = {
+                        name: gp.player.name,
+                        totalProfitCents: 0,
+                        totalBuyInCents: 0
+                    };
+                    seasonByPlayer.set(gp.playerId, seaRec);
+                }
+                seaRec.totalProfitCents += profitCents;
+                seaRec.totalBuyInCents += gp.buyInCents;
+            }
+        }
+    }
+
+    const allTimeSorted = [...allTimeByPlayer.entries()]
+        .map(([id, r]) => ({
+            playerId: id,
+            name: r.name,
+            totalProfitCents: r.totalProfitCents,
+            roi:
+                r.totalBuyInCents > 0
+                    ? r.totalProfitCents / r.totalBuyInCents
+                    : null
+        }))
+        .sort((a, b) => b.totalProfitCents - a.totalProfitCents);
+
+    const allTimeRank =
+        allTimeSorted.findIndex((r) => r.playerId === playerId) + 1 || null;
+    const topPlayersAllTime: PlayerRankRow[] = allTimeSorted.slice(0, 5).map(
+        (r, i) => ({
+            rank: i + 1,
+            playerId: r.playerId,
+            name: r.name,
+            totalProfitCents: r.totalProfitCents,
+            roi: r.roi
+        })
+    );
+
+    let currentSeasonName: string | null = null;
+    let currentSeasonRank: number | null = null;
+    let currentSeasonTotalPlayers = 0;
+    let topPlayersCurrentSeason: PlayerRankRow[] = [];
+
+    if (currentSeasonId && seasonByPlayer.size > 0) {
+        const seasonMeta = await prisma.season.findUnique({
+            where: { id: currentSeasonId },
+            select: { name: true }
+        });
+        currentSeasonName = seasonMeta?.name ?? null;
+        const seasonSorted = [...seasonByPlayer.entries()]
+            .map(([id, r]) => ({
+                playerId: id,
+                name: r.name,
+                totalProfitCents: r.totalProfitCents,
+                roi:
+                    r.totalBuyInCents > 0
+                        ? r.totalProfitCents / r.totalBuyInCents
+                        : null
+            }))
+            .sort((a, b) => b.totalProfitCents - a.totalProfitCents);
+        currentSeasonTotalPlayers = seasonSorted.length;
+        currentSeasonRank =
+            seasonSorted.findIndex((r) => r.playerId === playerId) + 1 || null;
+        topPlayersCurrentSeason = seasonSorted.slice(0, 5).map((r, i) => ({
+            rank: i + 1,
+            playerId: r.playerId,
+            name: r.name,
+            totalProfitCents: r.totalProfitCents,
+            roi: r.roi
+        }));
+    }
+
+    return {
+        currentSeasonName,
+        currentSeasonRank,
+        currentSeasonTotalPlayers,
+        allTimeRank,
+        allTimeTotalPlayers: allTimeSorted.length,
+        topPlayersCurrentSeason,
+        topPlayersAllTime
+    };
+}

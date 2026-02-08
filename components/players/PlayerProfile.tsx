@@ -45,7 +45,8 @@ import { formatCurrency, formatCurrencyWithSign, formatPercent } from '@/lib/mon
 import { cn } from '@/lib/utils';
 import type {
     PlayerProfileData,
-    PlayerRecentGame,
+    PlayerComparisonData,
+    PlayerRankRow,
     PlayerSeasonResult
 } from '@/actions/playerActions';
 
@@ -54,7 +55,108 @@ type DateRangeFilter = 'all' | '7' | '30';
 type SeasonSortKey = 'profit' | 'roi' | 'score' | 'season';
 type NightSortKey = 'profit' | 'roi' | 'tableShare';
 
-export function PlayerProfile({ data }: { data: PlayerProfileData }) {
+function ComparisonTable({
+    rows,
+    currentPlayerId,
+    currentPlayerName,
+    currentProfitCents,
+    currentRoi,
+    currentPlayerRank
+}: {
+    rows: PlayerRankRow[];
+    currentPlayerId: string;
+    currentPlayerName: string;
+    currentProfitCents: number;
+    currentRoi: number | null;
+    currentPlayerRank?: number | null;
+}) {
+    const includesCurrent = rows.some((r) => r.playerId === currentPlayerId);
+    const displayRows = includesCurrent
+        ? rows
+        : [
+              ...rows,
+              {
+                  rank: currentPlayerRank ?? 0,
+                  playerId: currentPlayerId,
+                  name: currentPlayerName,
+                  totalProfitCents: currentProfitCents,
+                  roi: currentRoi
+              } as PlayerRankRow
+          ];
+    return (
+        <div className="overflow-x-auto rounded-md border">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead className="w-14">Rank</TableHead>
+                        <TableHead>Player</TableHead>
+                        <TableHead className="text-right tabular-nums">
+                            Total profit
+                        </TableHead>
+                        <TableHead className="text-right tabular-nums">
+                            ROI
+                        </TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {displayRows.map((row) => {
+                        const isYou = row.playerId === currentPlayerId;
+                        return (
+                            <TableRow
+                                key={row.playerId}
+                                className={cn(
+                                    isYou && 'bg-muted/50 font-medium')
+                                }
+                            >
+                                <TableCell className="tabular-nums">
+                                    {row.rank > 0 ? `#${row.rank}` : '—'}
+                                </TableCell>
+                                <TableCell>
+                                    {isYou ? (
+                                        <span className="text-primary">
+                                            {row.name} (you)
+                                        </span>
+                                    ) : (
+                                        <Link
+                                            href={`/players/${row.playerId}`}
+                                            className="text-primary hover:underline"
+                                        >
+                                            {row.name}
+                                        </Link>
+                                    )}
+                                </TableCell>
+                                <TableCell
+                                    className={cn(
+                                        'text-right tabular-nums',
+                                        row.totalProfitCents >= 0
+                                            ? 'text-[hsl(var(--success))]'
+                                            : 'text-destructive'
+                                    )}
+                                >
+                                    {formatCurrencyWithSign(
+                                        row.totalProfitCents / 100
+                                    )}
+                                </TableCell>
+                                <TableCell className="text-right tabular-nums text-muted-foreground">
+                                    {row.roi != null
+                                        ? formatPercent(row.roi)
+                                        : '—'}
+                                </TableCell>
+                            </TableRow>
+                        );
+                    })}
+                </TableBody>
+            </Table>
+        </div>
+    );
+}
+
+type Props = {
+    data: PlayerProfileData;
+    comparison: PlayerComparisonData | null;
+};
+
+export function PlayerProfile({ data, comparison }: Props) {
     const {
         player,
         totalGames,
@@ -175,7 +277,7 @@ export function PlayerProfile({ data }: { data: PlayerProfileData }) {
                         </p>
                     </div>
                 </div>
-                <div className="min-w-0 flex-1 space-y-4">
+                    <div className="min-w-0 flex-1 space-y-4">
                     <div className="flex flex-wrap items-center gap-4 gap-y-2">
                         <div
                             className={cn(
@@ -187,6 +289,18 @@ export function PlayerProfile({ data }: { data: PlayerProfileData }) {
                         >
                             {formatCurrencyWithSign(totalProfitCents / 100)} all-time
                         </div>
+                        {comparison?.currentSeasonRank != null &&
+                            comparison.currentSeasonName && (
+                                <Badge variant="secondary" className="text-xs">
+                                    Ranked #{comparison.currentSeasonRank} in{' '}
+                                    {comparison.currentSeasonName}
+                                </Badge>
+                            )}
+                        {comparison?.allTimeRank != null && (
+                            <Badge variant="outline" className="text-xs">
+                                Ranked #{comparison.allTimeRank} all-time
+                            </Badge>
+                        )}
                         {currentStreak !== 0 && (
                             <Badge
                                 variant={currentStreak > 0 ? 'default' : 'destructive'}
@@ -372,6 +486,67 @@ export function PlayerProfile({ data }: { data: PlayerProfileData }) {
                     </Card>
                 )}
             </div>
+
+            {/* Player rank & performance comparison */}
+            {comparison && (
+                <Card className="min-w-0 overflow-hidden">
+                    <CardHeader>
+                        <CardTitle className="text-lg sm:text-xl">
+                            Performance comparison
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                            Compare with top players in the league
+                        </p>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        {comparison.currentSeasonName &&
+                            comparison.topPlayersCurrentSeason.length > 0 && (
+                                <div>
+                                    <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
+                                        Top 5 · {comparison.currentSeasonName}
+                                        {comparison.currentSeasonRank != null && (
+                                            <span className="ml-2 font-normal">
+                                                (You: #{comparison.currentSeasonRank} of{' '}
+                                                {comparison.currentSeasonTotalPlayers})
+                                            </span>
+                                        )}
+                                    </h3>
+                                    <ComparisonTable
+                                        rows={comparison.topPlayersCurrentSeason}
+                                        currentPlayerId={player.id}
+                                        currentPlayerName={player.fullName}
+                                        currentProfitCents={
+                                            currentSeasonProfitCents
+                                        }
+                                        currentRoi={currentSeasonRoi}
+                                        currentPlayerRank={
+                                            comparison.currentSeasonRank
+                                        }
+                                    />
+                                </div>
+                            )}
+                        <div>
+                            <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
+                                Top 5 · All-time
+                                {comparison.allTimeRank != null && (
+                                    <span className="ml-2 font-normal">
+                                        (You: #{comparison.allTimeRank} of{' '}
+                                        {comparison.allTimeTotalPlayers})
+                                    </span>
+                                )}
+                            </h3>
+                            <ComparisonTable
+                                rows={comparison.topPlayersAllTime}
+                                currentPlayerId={player.id}
+                                currentPlayerName={player.fullName}
+                                currentProfitCents={totalProfitCents}
+                                currentRoi={roi}
+                                currentPlayerRank={comparison.allTimeRank}
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Season Results Table */}
             {seasonResults.length > 0 && (
