@@ -36,15 +36,16 @@ export default async function DashboardPage() {
                         League Pulse
                     </h1>
                     <p className="text-muted-foreground">
-                        Is the league active? Who&apos;s hot? What just happened?
+                        Is the league active? Who&apos;s hot? What just
+                        happened?
                     </p>
                 </div>
-                <Button asChild size="lg" className="shrink-0">
+                {/* <Button asChild size="lg" className="shrink-0">
                     <Link href="/">
                         <Plus className="mr-2 h-5 w-5" />
                         Start New Game
                     </Link>
-                </Button>
+                </Button> */}
             </div>
 
             {/* 1. League Health Strip */}
@@ -150,12 +151,14 @@ export default async function DashboardPage() {
                                                 {player.currentStreak !== 0 && (
                                                     <span
                                                         className={
-                                                            player.currentStreak > 0
+                                                            player.currentStreak >
+                                                            0
                                                                 ? 'text-xs text-[hsl(var(--success))]'
                                                                 : 'text-xs text-destructive'
                                                         }
                                                     >
-                                                        {player.currentStreak > 0
+                                                        {player.currentStreak >
+                                                        0
                                                             ? `${player.currentStreak}W`
                                                             : `${Math.abs(player.currentStreak)}L`}
                                                     </span>
@@ -178,7 +181,9 @@ export default async function DashboardPage() {
                                                 </span>
                                                 {player.roi != null && (
                                                     <span className="text-muted-foreground">
-                                                        {formatPercent(player.roi)}{' '}
+                                                        {formatPercent(
+                                                            player.roi
+                                                        )}{' '}
                                                         ROI
                                                     </span>
                                                 )}
@@ -231,7 +236,8 @@ export default async function DashboardPage() {
                                                     )}{' '}
                                                     ·{' '}
                                                     {formatCurrency(
-                                                        night.totalPotCents / 100
+                                                        night.totalPotCents /
+                                                            100
                                                     )}{' '}
                                                     pot · {night.playerCount}{' '}
                                                     players
@@ -243,12 +249,17 @@ export default async function DashboardPage() {
                                                             href={`/players/${night.biggestWinner.playerId}`}
                                                             className="font-medium text-primary hover:underline"
                                                         >
-                                                            {night.biggestWinner.name}
+                                                            {
+                                                                night
+                                                                    .biggestWinner
+                                                                    .name
+                                                            }
                                                         </Link>{' '}
                                                         (
                                                         {formatCurrencyWithSign(
                                                             night.biggestWinner
-                                                                .profitCents / 100
+                                                                .profitCents /
+                                                                100
                                                         )}
                                                         )
                                                     </p>
@@ -279,9 +290,7 @@ export default async function DashboardPage() {
                     <Card className="min-w-0">
                         <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                             <Gamepad2 className="mb-4 h-12 w-12 text-muted-foreground" />
-                            <p className="text-lg font-medium">
-                                No nights yet
-                            </p>
+                            <p className="text-lg font-medium">No nights yet</p>
                             <p className="mb-4 text-sm text-muted-foreground">
                                 Start your first game to see the heartbeat here
                             </p>
@@ -335,8 +344,8 @@ export default async function DashboardPage() {
                                     className="font-medium text-primary hover:underline"
                                 >
                                     {formatCurrency(
-                                        data.bigMoments.largestPotEver.totalPotCents /
-                                            100
+                                        data.bigMoments.largestPotEver
+                                            .totalPotCents / 100
                                     )}
                                 </Link>
                                 <span className="text-xs text-muted-foreground">
