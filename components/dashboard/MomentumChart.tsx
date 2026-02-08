@@ -73,8 +73,8 @@ export function MomentumChart({ momentumData, momentumPlayerNames }: Props) {
                             borderRadius: 'var(--radius)',
                             border: '1px solid hsl(var(--border))'
                         }}
-                        formatter={(value: number) => [
-                            formatCurrencyWithSign(value),
+                        formatter={(value: number | undefined) => [
+                            formatCurrencyWithSign(value ?? 0),
                             ''
                         ]}
                         labelFormatter={(label) => `Night: ${label}`}
