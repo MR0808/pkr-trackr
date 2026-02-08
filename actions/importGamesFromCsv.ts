@@ -84,10 +84,20 @@ function parseDollars(s: string): number {
 
 function parseDate(s: string): Date {
     const str = s.trim();
+    // YYYY-MM-DD
     const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (iso) return new Date(parseInt(iso[1], 10), parseInt(iso[2], 10) - 1, parseInt(iso[3], 10));
-    const us = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-    if (us) return new Date(parseInt(us[3], 10), parseInt(us[1], 10) - 1, parseInt(us[2], 10));
+    // dd/mm/yyyy or d/m/yyyy (day, month, year)
+    const dmy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (dmy) {
+        const day = parseInt(dmy[1], 10);
+        const month = parseInt(dmy[2], 10) - 1;
+        const year = parseInt(dmy[3], 10);
+        if (month >= 0 && month <= 11) {
+            const d = new Date(year, month, day);
+            if (!Number.isNaN(d.getTime())) return d;
+        }
+    }
     const d = new Date(str);
     if (Number.isNaN(d.getTime())) throw new Error(`Invalid date: ${str}`);
     return d;

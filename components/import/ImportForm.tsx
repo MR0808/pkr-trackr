@@ -33,7 +33,7 @@ export function ImportForm() {
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <Textarea
-                placeholder="Paste your CSV here (headers: season_name, game_date, game_name, player_name, buy_in, cash_out)..."
+                placeholder="Paste your CSV here (headers: season_name, game_date, game_name, player_name, buy_in, cash_out). game_date: YYYY-MM-DD or dd/mm/yyyy..."
                 value={csv}
                 onChange={(e) => setCsv(e.target.value)}
                 rows={12}

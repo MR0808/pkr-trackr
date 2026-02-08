@@ -10,7 +10,7 @@ Use this to upload paper history into PkrTrackr (e.g. Season 2024 and Season 202
 | Column       | Required | Description |
 |-------------|----------|-------------|
 | season_name | Yes      | Season label, e.g. `2024` or `Season 2025`. Creates or reuses a season for the default group. |
-| game_date   | Yes      | Date of the game: `YYYY-MM-DD` (e.g. `2024-03-15`). |
+| game_date   | Yes      | Date of the game: `YYYY-MM-DD` (e.g. `2024-03-15`) or `dd/mm/yyyy` / `d/m/yyyy` (e.g. `22/12/2022`, `3/10/2022` for 3 Oct). |
 | game_name   | Yes      | Name for the game night (e.g. `Friday Night`, `March 15`). |
 | player_name | Yes      | Player display name. Created if missing in the group. |
 | buy_in      | Yes      | Total buy-in in **dollars** (e.g. `100` or `50.50`). |
@@ -40,4 +40,4 @@ Imported games are created as **CLOSED** and linked to the **default group** and
 
 - The **default group** is used (see “Single default group” in the app). Ensure your group exists and, if needed, set `DEFAULT_GROUP_ID` in `.env`.
 - Duplicate rows (same game + player) are treated as one: later row wins for that player in that game.
-- Dates are parsed as local date (no time). Use `YYYY-MM-DD` for reliable results.
+- Dates are parsed as local date (no time). Supported: `YYYY-MM-DD` or `dd/mm/yyyy` / `d/m/yyyy` (day/month/year).
