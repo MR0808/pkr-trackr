@@ -61,8 +61,8 @@ export function DashboardCharts({ monthly }: { monthly: DashboardMonthlyRow[] })
                             labelFormatter={(_, payload) =>
                                 payload?.[0]?.payload?.monthLabel
                             }
-                            formatter={(value: number) => [
-                                `${value} game${value !== 1 ? 's' : ''}`,
+                            formatter={(value: number | undefined) => [
+                                `${value ?? 0} game${(value ?? 0) !== 1 ? 's' : ''}`,
                                 'Games'
                             ]}
                         />
@@ -106,8 +106,8 @@ export function DashboardCharts({ monthly }: { monthly: DashboardMonthlyRow[] })
                                 borderRadius: 'var(--radius)',
                                 border: '1px solid hsl(var(--border))'
                             }}
-                            formatter={(value: number) => [
-                                formatCurrency(value),
+                            formatter={(value: number | undefined) => [
+                                formatCurrency(value ?? 0),
                                 'Buy-ins'
                             ]}
                         />
