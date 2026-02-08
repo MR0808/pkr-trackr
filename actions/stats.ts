@@ -332,6 +332,14 @@ export async function loadStatsPageData(): Promise<StatsPageData | null> {
     let bestPerformer: StatsAwards['bestPerformer'] = null;
     for (const s of seasons) {
         for (const p of s.players) {
+            const allTimeRec = allTimeByPlayer.get(p.playerId);
+            if (
+                !allTimeRec ||
+                allTimeRec.totalGames < limits.minNightsPlayed ||
+                allTimeRec.totalBuyInCents < limits.minTotalBuyInCents
+            ) {
+                continue;
+            }
             if (p.totalGames >= 1 && p.roi != null && (!bestPlayer || p.roi > bestPlayer.roi)) {
                 bestPlayer = { name: p.name, playerId: p.playerId, roi: p.roi, seasonName: s.name };
             }

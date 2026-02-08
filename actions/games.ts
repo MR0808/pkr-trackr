@@ -1,6 +1,7 @@
 'use server';
 
 import { format } from 'date-fns';
+import { getLeaderboardLimits } from '@/lib/leaderboard-config';
 import { prisma } from '@/lib/prisma';
 
 export type GameListRow = {
@@ -647,6 +648,18 @@ export async function loadLeaguePulseData(opts: {
             rec.gameProfits.push(p.profitCents);
         }
     }
+    // All-time game count per player (for min-nights filter on overall stats)
+    const totalGamesByPlayer = new Map<string, number>();
+    for (const g of games) {
+        for (const p of g.profits) {
+            totalGamesByPlayer.set(
+                p.playerId,
+                (totalGamesByPlayer.get(p.playerId) ?? 0) + 1
+            );
+        }
+    }
+    const { minNightsPlayed: minNights } = getLeaderboardLimits();
+
     // Current streak: from most recent game, count consecutive same-sign results
     function getStreak(gameProfits: number[]): number {
         if (gameProfits.length === 0) return 0;
@@ -661,6 +674,7 @@ export async function loadLeaguePulseData(opts: {
         return sign * count;
     }
     const hotPlayers: HotPlayer[] = [...momentumByPlayer.entries()]
+        .filter(([playerId]) => (totalGamesByPlayer.get(playerId) ?? 0) >= minNights)
         .map(([playerId, rec]) => ({
             playerId,
             name: rec.name,
@@ -752,6 +766,7 @@ export async function loadLeaguePulseData(opts: {
         }
     }
     for (const [playerId, list] of playerGameProfits) {
+        if ((totalGamesByPlayer.get(playerId) ?? 0) < minNights) continue;
         const streak = maxConsecutiveWins(list);
         if (
             streak > 0 &&
@@ -780,9 +795,9 @@ export async function loadLeaguePulseData(opts: {
             }
         }
     }
-    const mostProfitableEntry = [...allTimeProfit.entries()].sort(
-        (a, b) => b[1].totalProfitCents - a[1].totalProfitCents
-    )[0];
+    const mostProfitableEntry = [...allTimeProfit.entries()]
+        .filter(([playerId]) => (totalGamesByPlayer.get(playerId) ?? 0) >= minNights)
+        .sort((a, b) => b[1].totalProfitCents - a[1].totalProfitCents)[0];
     const mostProfitableAllTime: BigMoments['mostProfitableAllTime'] =
         mostProfitableEntry && mostProfitableEntry[1].totalProfitCents > 0
             ? {
@@ -792,14 +807,14 @@ export async function loadLeaguePulseData(opts: {
               }
             : null;
 
-    // Balance: all-time profit per player (for snapshot)
-    const balance: BalancePlayer[] = [...allTimeProfit.entries()].map(
-        ([playerId, rec]) => ({
+    // Balance: all-time profit per player (for snapshot); only players meeting min nights
+    const balance: BalancePlayer[] = [...allTimeProfit.entries()]
+        .filter(([playerId]) => (totalGamesByPlayer.get(playerId) ?? 0) >= minNights)
+        .map(([playerId, rec]) => ({
             playerId,
             name: rec.name,
             totalProfitCents: rec.totalProfitCents
-        })
-    );
+        }));
 
     return {
         health,
