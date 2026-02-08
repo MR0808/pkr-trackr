@@ -95,3 +95,130 @@ export type StatsPageData = {
     /** Count of players with total profit > 0 vs <= 0 (all players with at least one game) */
     profitDistribution: { profitable: number; nonProfitable: number };
 };
+
+/* ----- Stats area (filtered) ----- */
+
+export type LeagueStatsOverview = {
+    totalNights: number;
+    totalPotCents: number;
+    averagePotCents: number;
+    averagePotLast10Cents: number | null;
+    largestPotCents: number;
+    uniquePlayersAllTime: number;
+    uniquePlayersLast30Days: number;
+    averagePlayersPerNight: number;
+};
+
+export type RecentNightRow = {
+    gameId: string;
+    date: Date;
+    potCents: number;
+    playersCount: number;
+    biggestWinnerName: string;
+    biggestWinnerPlayerId: string;
+    biggestWinnerProfitCents: number;
+};
+
+export type ActivityTrendPoint = {
+    date: string;
+    potCents: number;
+    playersCount: number;
+};
+
+export type RecordItem = {
+    label: string;
+    value: string;
+    playerId?: string;
+    gameId?: string;
+    playerName?: string;
+};
+
+export type NightTableRow = {
+    gameId: string;
+    date: Date;
+    status: 'OPEN' | 'CLOSED';
+    potCents: number;
+    playersCount: number;
+    biggestWinnerName: string | null;
+    biggestWinnerPlayerId: string | null;
+    biggestWinnerProfitCents: number | null;
+    biggestLoserName: string | null;
+    biggestLoserPlayerId: string | null;
+    biggestLoserLossCents: number | null;
+    rebuysCount: number;
+};
+
+export type SeasonTableRow = {
+    seasonId: string;
+    name: string;
+    startsAt: Date;
+    endsAt: Date | null;
+    nights: number;
+    totalPotCents: number;
+    avgPotCents: number;
+    playersParticipated: number;
+    mostProfitablePlayerName: string | null;
+    mostProfitablePlayerId: string | null;
+    mostProfitableProfitCents: number | null;
+    bestRoiPlayerName: string | null;
+    bestRoiPlayerId: string | null;
+    bestRoi: number | null;
+};
+
+export type PlayerStatsRow = {
+    playerId: string;
+    name: string;
+    nightsPlayed: number;
+    totalBuyInCents: number;
+    totalCashOutCents: number;
+    totalProfitCents: number;
+    roi: number | null;
+    performanceScore: number | null;
+    winRate: number;
+    bestNightProfitCents: number | null;
+    worstNightLossCents: number | null;
+    meetsEligibility: boolean;
+};
+
+export type RollingFormRow = {
+    playerId: string;
+    name: string;
+    profitLastN: number;
+    roiLastN: number | null;
+    trendDirection: 'up' | 'down' | 'flat';
+};
+
+export type CompetitivenessResult = {
+    top1ShareOfPositiveProfit: number;
+    top3ShareOfPositiveProfit: number;
+    badge: 'Dominated' | 'Competitive';
+};
+
+export type DistributionBucket = {
+    label: string;
+    count: number;
+};
+
+export type SkillRatingRow = {
+    playerId: string;
+    name: string;
+    rating: number;
+    changeLastN: number;
+};
+
+export type InsightsNarrative = {
+    summary: string;
+    roiLeader: string | null;
+    profitLeader: string | null;
+    scoreLeader: string | null;
+    hottestLast10: string | null;
+    potTrend: string;
+    competitiveness: string;
+    attendance: string;
+};
+
+export type HeaterIndexRow = {
+    playerId: string;
+    name: string;
+    heaterNightCount: number;
+};

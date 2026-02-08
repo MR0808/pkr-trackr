@@ -129,30 +129,36 @@ async function main() {
         }
 
         // ----------------------------
-        // Create game (Saturday night)
-        // ----------------------------
-        const scheduledAt = fromZonedTime('2026-02-07T19:30', MEL_TZ); // 7:30pm Melbourne
-        const game = await tx.game.create({
-            data: {
-                groupId: group.id,
-                seasonId: season.id,
-                name: 'Saturday Night 7th Feb',
-                shareId: nanoid(16),
-                scheduledAt
-            }
-        });
-
-        // ----------------------------
-        // Add ALL players (including host) to game
+        // Create 10 closed games (so Stats shows "last 10 nights")
         // ----------------------------
         const allPlayers = [hostPlayer, ...guestPlayers];
-        for (const p of allPlayers) {
-            await tx.gamePlayer.create({
+        const nightCount = 10;
+        for (let i = 0; i < nightCount; i++) {
+            const nightDate = new Date('2026-01-25');
+            nightDate.setDate(nightDate.getDate() + i);
+            const scheduledAt = fromZonedTime(
+                `${nightDate.getFullYear()}-${String(nightDate.getMonth() + 1).padStart(2, '0')}-${String(nightDate.getDate()).padStart(2, '0')}T19:30`,
+                MEL_TZ
+            );
+            const game = await tx.game.create({
                 data: {
-                    gameId: game.id,
-                    playerId: p.id
+                    groupId: group.id,
+                    seasonId: season.id,
+                    name: `Night ${i + 1} – ${scheduledAt.toISOString().slice(0, 10)}`,
+                    shareId: nanoid(16),
+                    scheduledAt,
+                    status: 'CLOSED',
+                    closedAt: scheduledAt
                 }
             });
+            for (const p of allPlayers) {
+                await tx.gamePlayer.create({
+                    data: {
+                        gameId: game.id,
+                        playerId: p.id
+                    }
+                });
+            }
         }
     });
 
