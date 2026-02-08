@@ -12,8 +12,7 @@ import {
     XAxis,
     YAxis,
     CartesianGrid,
-    Tooltip,
-    ResponsiveContainer
+    Tooltip
 } from 'recharts';
 import type {
     LeagueStatsOverview,
@@ -24,6 +23,7 @@ import type {
 } from '@/types/stats';
 import type { CompetitivenessResult } from '@/types/stats';
 import { StatCard } from './StatCard';
+import { ChartContainer } from './ChartContainer';
 
 type Props = {
     overview: LeagueStatsOverview;
@@ -282,9 +282,11 @@ export function StatsOverviewClient({
                         </p>
                     </CardHeader>
                     <CardContent>
-                        <div className="h-[280px] w-full min-w-0">
-                            <ResponsiveContainer width="100%" height="100%">
+                        <ChartContainer className="h-[280px] w-full min-w-0">
+                            {(width, height) => (
                                 <LineChart
+                                    width={width}
+                                    height={height}
                                     data={trend.map((t) => ({
                                         ...t,
                                         pot: t.potCents / 100
@@ -333,8 +335,8 @@ export function StatsOverviewClient({
                                         connectNulls
                                     />
                                 </LineChart>
-                            </ResponsiveContainer>
-                        </div>
+                            )}
+                        </ChartContainer>
                     </CardContent>
                 </Card>
             )}

@@ -7,11 +7,11 @@ import {
     XAxis,
     YAxis,
     CartesianGrid,
-    Tooltip,
-    ResponsiveContainer
+    Tooltip
 } from 'recharts';
 import { formatCurrency } from '@/lib/money';
 import type { ActivityTrendPoint } from '@/types/stats';
+import { ChartContainer } from './ChartContainer';
 
 type Props = {
     data: ActivityTrendPoint[];
@@ -26,9 +26,11 @@ export function PotTrendChart({ data }: Props) {
     if (chartData.length === 0) return null;
 
     return (
-        <div className="h-[280px] w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
+        <ChartContainer className="h-[280px] w-full min-w-0">
+            {(width, height) => (
                 <LineChart
+                    width={width}
+                    height={height}
                     data={chartData}
                     margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
                 >
@@ -61,7 +63,7 @@ export function PotTrendChart({ data }: Props) {
                         connectNulls
                     />
                 </LineChart>
-            </ResponsiveContainer>
-        </div>
+            )}
+        </ChartContainer>
     );
 }
