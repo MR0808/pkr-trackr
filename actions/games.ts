@@ -1,5 +1,6 @@
 'use server';
 
+import { format } from 'date-fns';
 import { prisma } from '@/lib/prisma';
 
 export type GameListRow = {
@@ -18,6 +19,7 @@ export type GameListRow = {
 };
 
 export type GameResultRow = {
+    playerId: string;
     playerName: string;
     buyInCents: number;
     cashOutCents: number | null;
@@ -129,6 +131,330 @@ export async function loadGamesForGroup(opts: {
     });
 }
 
+export type DashboardMonthlyRow = {
+    month: string;
+    gameCount: number;
+    totalBuyInCents: number;
+    netCents: number;
+};
+
+export type DashboardData = {
+    games: GameListRow[];
+    monthly: DashboardMonthlyRow[];
+};
+
+const DASHBOARD_GAMES_TAKE = 400;
+
+export async function loadDashboardData(opts: {
+    groupId: string;
+}): Promise<DashboardData> {
+    const { groupId } = opts;
+    if (!groupId) throw new Error('groupId is required');
+
+    const games = await loadGamesForGroup({
+        groupId,
+        take: DASHBOARD_GAMES_TAKE
+    });
+
+    const byMonth = new Map<
+        string,
+        { gameCount: number; totalBuyInCents: number; totalCashOutCents: number }
+    >();
+    for (const g of games) {
+        const d = new Date(g.scheduledAt);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const cur = byMonth.get(key) ?? {
+            gameCount: 0,
+            totalBuyInCents: 0,
+            totalCashOutCents: 0
+        };
+        cur.gameCount += 1;
+        cur.totalBuyInCents += g.totalBuyInCents;
+        cur.totalCashOutCents += g.totalCashOutCents;
+        byMonth.set(key, cur);
+    }
+
+    const monthly: DashboardMonthlyRow[] = Array.from(byMonth.entries())
+        .map(([month, agg]) => ({
+            month,
+            gameCount: agg.gameCount,
+            totalBuyInCents: agg.totalBuyInCents,
+            netCents: agg.totalCashOutCents - agg.totalBuyInCents
+        }))
+        .sort((a, b) => a.month.localeCompare(b.month));
+
+    return { games, monthly };
+}
+
+// --- Dashboard page (current season, momentum, highlights) ---
+
+export type DashboardSeasonKpis = {
+    totalGames: number;
+    totalBuyInCents: number;
+    totalCashOutCents: number;
+    totalProfitCents: number;
+    uniquePlayers: number;
+};
+
+export type DashboardMomentumPoint = {
+    /** e.g. "Jan 15" */
+    nightLabel: string;
+    gameId: string;
+    /** Cumulative profit in cents per player (top 5). Keys = playerId. */
+    cumulativeByPlayer: Record<string, number>;
+};
+
+export type DashboardHighlight = {
+    roiLeader: { name: string; playerId: string; roi: number } | null;
+    biggestSingleNightWin: {
+        name: string;
+        playerId: string;
+        profitCents: number;
+        gameId: string;
+        gameName: string;
+    } | null;
+    mostActivePlayer: {
+        name: string;
+        playerId: string;
+        totalBuyInCents: number;
+    } | null;
+};
+
+export type RecentNight = {
+    id: string;
+    name: string;
+    scheduledAt: Date;
+    status: 'OPEN' | 'CLOSED';
+    playerCount: number;
+};
+
+export type DashboardPageData = {
+    currentSeason: { id: string; name: string } | null;
+    seasonKpis: DashboardSeasonKpis | null;
+    /** Top 5 player names by total profit (for chart legend). Order matches series. */
+    momentumPlayerNames: { playerId: string; name: string }[];
+    momentumData: DashboardMomentumPoint[];
+    recentNights: RecentNight[];
+    highlights: DashboardHighlight;
+};
+
+export async function loadDashboardPageData(opts: {
+    groupId: string;
+}): Promise<DashboardPageData> {
+    const { groupId } = opts;
+    if (!groupId) throw new Error('groupId is required');
+
+    const [seasons, closedGamesWithPlayers, recentGames] = await Promise.all([
+        prisma.season.findMany({
+            where: { groupId },
+            orderBy: { startsAt: 'desc' },
+            select: { id: true, name: true }
+        }),
+        prisma.game.findMany({
+            where: { groupId, status: 'CLOSED' },
+            orderBy: { scheduledAt: 'asc' },
+            select: {
+                id: true,
+                name: true,
+                scheduledAt: true,
+                seasonId: true,
+                players: {
+                    select: {
+                        playerId: true,
+                        buyInCents: true,
+                        cashOutCents: true,
+                        adjustmentCents: true,
+                        player: { select: { name: true } }
+                    }
+                }
+            }
+        }),
+        loadGamesForGroup({ groupId, take: 5 })
+    ]);
+
+    const recentNights: RecentNight[] = recentGames.map((g) => ({
+        id: g.id,
+        name: g.name,
+        scheduledAt: g.scheduledAt,
+        status: g.status,
+        playerCount: g.playerCount
+    }));
+
+    // Current season = most recent season that has at least one closed game
+    const seasonIdsWithGames = new Set(
+        closedGamesWithPlayers.map((g) => g.seasonId).filter(Boolean)
+    ) as Set<string>;
+    const currentSeason =
+        seasons.find((s) => seasonIdsWithGames.has(s.id)) ?? null;
+
+    if (!currentSeason) {
+        return {
+            currentSeason: null,
+            seasonKpis: null,
+            momentumPlayerNames: [],
+            momentumData: [],
+            recentNights,
+            highlights: {
+                roiLeader: null,
+                biggestSingleNightWin: null,
+                mostActivePlayer: null
+            }
+        };
+    }
+
+    const seasonGames = closedGamesWithPlayers.filter(
+        (g) => g.seasonId === currentSeason.id
+    );
+
+    // Per-player totals for the season (profit, buy-ins)
+    type PlayerRec = {
+        name: string;
+        totalProfitCents: number;
+        totalBuyInCents: number;
+        roi: number | null;
+    };
+    const byPlayer = new Map<string, PlayerRec>();
+    const perGamePerPlayer: { gameId: string; scheduledAt: Date; playerId: string; profitCents: number }[] = [];
+
+    for (const g of seasonGames) {
+        for (const gp of g.players) {
+            const cash = gp.cashOutCents ?? 0;
+            const profitCents = cash - gp.buyInCents - gp.adjustmentCents;
+            perGamePerPlayer.push({
+                gameId: g.id,
+                scheduledAt: g.scheduledAt,
+                playerId: gp.playerId,
+                profitCents
+            });
+
+            let rec = byPlayer.get(gp.playerId);
+            if (!rec) {
+                rec = {
+                    name: gp.player.name,
+                    totalProfitCents: 0,
+                    totalBuyInCents: 0,
+                    roi: null
+                };
+                byPlayer.set(gp.playerId, rec);
+            }
+            rec.totalProfitCents += profitCents;
+            rec.totalBuyInCents += gp.buyInCents;
+        }
+    }
+
+    for (const rec of byPlayer.values()) {
+        rec.roi =
+            rec.totalBuyInCents > 0
+                ? rec.totalProfitCents / rec.totalBuyInCents
+                : null;
+    }
+
+    // Season KPIs
+    const totalBuyInCents = seasonGames.reduce((sum, g) => {
+        return sum + g.players.reduce((s, p) => s + p.buyInCents, 0);
+    }, 0);
+    const totalCashOutCents = seasonGames.reduce((sum, g) => {
+        return sum + g.players.reduce((s, p) => s + (p.cashOutCents ?? 0), 0);
+    }, 0);
+    const seasonKpis: DashboardSeasonKpis = {
+        totalGames: seasonGames.length,
+        totalBuyInCents,
+        totalCashOutCents,
+        totalProfitCents: totalCashOutCents - totalBuyInCents,
+        uniquePlayers: byPlayer.size
+    };
+
+    // Top 5 by total profit (for momentum chart)
+    const top5 = [...byPlayer.entries()]
+        .sort((a, b) => b[1].totalProfitCents - a[1].totalProfitCents)
+        .slice(0, 5);
+    const momentumPlayerNames = top5.map(([playerId, rec]) => ({
+        playerId,
+        name: rec.name
+    }));
+    const top5Ids = new Set(top5.map(([id]) => id));
+
+    // Cumulative profit by night (only top 5 players)
+    const gamesByDate = [...seasonGames].sort(
+        (a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
+    );
+    const cumulativeByPlayer = new Map<string, number>();
+    for (const [pid] of top5) cumulativeByPlayer.set(pid, 0);
+
+    const momentumData: DashboardMomentumPoint[] = gamesByDate.map((g) => {
+        const gameRows = perGamePerPlayer.filter(
+            (r) => r.gameId === g.id && top5Ids.has(r.playerId)
+        );
+        for (const r of gameRows) {
+            const cur = cumulativeByPlayer.get(r.playerId) ?? 0;
+            cumulativeByPlayer.set(r.playerId, cur + r.profitCents);
+        }
+        const cumulativeByPlayerRecord: Record<string, number> = {};
+        for (const [pid, cents] of cumulativeByPlayer) {
+            cumulativeByPlayerRecord[pid] = cents;
+        }
+        return {
+            nightLabel: format(new Date(g.scheduledAt), 'MMM d'),
+            gameId: g.id,
+            cumulativeByPlayer: cumulativeByPlayerRecord
+        };
+    });
+
+    // Highlights: ROI leader, biggest single-night win, most active
+    const roiLeaderEntry = [...byPlayer.entries()]
+        .filter(([, r]) => r.roi != null)
+        .sort((a, b) => (b[1].roi ?? 0) - (a[1].roi ?? 0))[0];
+    const roiLeader = roiLeaderEntry
+        ? {
+              name: roiLeaderEntry[1].name,
+              playerId: roiLeaderEntry[0],
+              roi: roiLeaderEntry[1].roi!
+          }
+        : null;
+
+    const singleNightWins = perGamePerPlayer
+        .filter((r) => r.profitCents > 0)
+        .map((r) => {
+            const game = seasonGames.find((g) => g.id === r.gameId)!;
+            const rec = byPlayer.get(r.playerId)!;
+            return {
+                name: rec.name,
+                playerId: r.playerId,
+                profitCents: r.profitCents,
+                gameId: game.id,
+                gameName: game.name
+            };
+        });
+    const biggestSingleNightWin =
+        singleNightWins.length > 0
+            ? singleNightWins.sort((a, b) => b.profitCents - a.profitCents)[0]
+            : null;
+
+    const mostActiveEntry = [...byPlayer.entries()].sort(
+        (a, b) => b[1].totalBuyInCents - a[1].totalBuyInCents
+    )[0];
+    const mostActivePlayer = mostActiveEntry
+        ? {
+              name: mostActiveEntry[1].name,
+              playerId: mostActiveEntry[0],
+              totalBuyInCents: mostActiveEntry[1].totalBuyInCents
+          }
+        : null;
+
+    return {
+        currentSeason: { id: currentSeason.id, name: currentSeason.name },
+        seasonKpis,
+        momentumPlayerNames,
+        momentumData,
+        recentNights,
+        highlights: {
+            roiLeader,
+            biggestSingleNightWin,
+            mostActivePlayer
+        }
+    };
+}
+
 const GAMES_LIST_TAKE = 500;
 
 export async function loadGamesListPageData(opts: {
@@ -159,6 +485,7 @@ export async function loadGamesListPageData(opts: {
                 season: { select: { id: true, name: true } },
                 players: {
                     select: {
+                        playerId: true,
                         buyInCents: true,
                         cashOutCents: true,
                         adjustmentCents: true,
@@ -189,6 +516,7 @@ export async function loadGamesListPageData(opts: {
             totalCashOutCents += cashOutCents ?? 0;
             const score = nightScore(profitCents, buyInCents);
             return {
+                playerId: gp.playerId,
                 playerName: gp.player.name,
                 buyInCents,
                 cashOutCents,
@@ -384,7 +712,7 @@ export async function createGameAction(
         return { success: true, gameId: game.id };
     } catch (err: unknown) {
         if (err && typeof err === 'object' && 'name' in err && (err as { name: string }).name === 'ZodError') {
-            const zod = err as { errors: { message: string }[] };
+            const zod = err as unknown as { errors: { message: string }[] };
             return { success: false, error: zod.errors[0]?.message ?? 'Validation failed' };
         }
         return {

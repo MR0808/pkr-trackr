@@ -18,12 +18,12 @@ export default async function GamesPage() {
                         Manage all your poker game sessions
                     </p>
                 </div>
-                <Button asChild size="lg">
+                {/* <Button asChild size="lg">
                     <Link href="/">
                         <Plus className="mr-2 h-5 w-5" />
                         New Game
                     </Link>
-                </Button>
+                </Button> */}
             </div>
 
             <GamesList data={data} />

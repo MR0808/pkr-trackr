@@ -1,6 +1,7 @@
 'use client';
 
 import { useTransition } from 'react';
+import Link from 'next/link';
 import { Undo2, Pencil, Wallet, ArrowDownUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -103,9 +104,12 @@ export function ActivityFeed({
                                     </div>
                                     <div className="flex-1">
                                         <div className="flex items-baseline gap-1 text-sm lg:text-base">
-                                            <span className="font-medium">
+                                            <Link
+                                                href={`/players/${transaction.playerId}`}
+                                                className="font-medium text-primary hover:underline"
+                                            >
                                                 {transaction.playerName}
-                                            </span>
+                                            </Link>
                                             <span className="text-muted-foreground">
                                                 {getTransactionText(
                                                     transaction

@@ -1,6 +1,7 @@
 'use client';
 
 import { useTransition } from 'react';
+import Link from 'next/link';
 import {
     Card,
     CardContent,
@@ -111,7 +112,12 @@ export function PlayerCard({
             <CardHeader className="pb-1">
                 <div className="flex items-start justify-between">
                     <h3 className="flex items-center gap-2 text-lg font-semibold lg:text-xl">
-                        <span>{player.name}</span>
+                        <Link
+                            href={`/players/${player.id}`}
+                            className="text-primary hover:underline"
+                        >
+                            {player.name}
+                        </Link>
                         {isTemporary && (
                             <span className="flex items-center gap-2">
                                 <Badge

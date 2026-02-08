@@ -259,11 +259,16 @@ function GameCard({ game }: { game: GameListRowWithResults }) {
                             <TableBody>
                                 {game.results.map((r) => (
                                     <TableRow
-                                        key={r.playerName}
+                                        key={r.playerId}
                                         className="border-b last:border-0"
                                     >
                                         <TableCell className="min-w-0 text-xs font-medium">
-                                            <span className="truncate">{r.playerName}</span>
+                                            <Link
+                                                href={`/players/${r.playerId}`}
+                                                className="truncate font-medium text-primary hover:underline"
+                                            >
+                                                {r.playerName}
+                                            </Link>
                                         </TableCell>
                                         <TableCell className="hidden text-right text-xs tabular-nums sm:table-cell">
                                             {formatCurrency(

@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import Link from 'next/link';
 import {
     Accordion,
     AccordionContent,
@@ -68,7 +69,12 @@ export function StatsBySeason({ seasons }: { seasons: SeasonSummary[] }) {
                                                     Top winner
                                                 </p>
                                                 <p className="font-semibold">
-                                                    {season.topWinner.name}
+                                                    <Link
+                                                        href={`/players/${season.topWinner.playerId}`}
+                                                        className="text-primary hover:underline"
+                                                    >
+                                                        {season.topWinner.name}
+                                                    </Link>
                                                 </p>
                                                 <p
                                                     className={cn(
@@ -93,7 +99,12 @@ export function StatsBySeason({ seasons }: { seasons: SeasonSummary[] }) {
                                                     Best ROI
                                                 </p>
                                                 <p className="font-semibold">
-                                                    {season.bestROI.name}
+                                                    <Link
+                                                        href={`/players/${season.bestROI.playerId}`}
+                                                        className="text-primary hover:underline"
+                                                    >
+                                                        {season.bestROI.name}
+                                                    </Link>
                                                 </p>
                                                 <p className="text-sm tabular-nums">
                                                     {formatPercent(
@@ -110,7 +121,12 @@ export function StatsBySeason({ seasons }: { seasons: SeasonSummary[] }) {
                                                     Best performer
                                                 </p>
                                                 <p className="font-semibold">
-                                                    {season.bestPerformer.name}
+                                                    <Link
+                                                        href={`/players/${season.bestPerformer.playerId}`}
+                                                        className="text-primary hover:underline"
+                                                    >
+                                                        {season.bestPerformer.name}
+                                                    </Link>
                                                 </p>
                                                 <p className="text-sm tabular-nums">
                                                     {season.bestPerformer.seasonScore.toFixed(
@@ -165,7 +181,12 @@ export function StatsBySeason({ seasons }: { seasons: SeasonSummary[] }) {
                                                         className="border-b text-sm last:border-0"
                                                     >
                                                         <TableCell className="min-w-0 font-medium">
-                                                            <span className="truncate">{p.name}</span>
+                                                            <Link
+                                                                href={`/players/${p.playerId}`}
+                                                                className="truncate text-primary hover:underline"
+                                                            >
+                                                                {p.name}
+                                                            </Link>
                                                         </TableCell>
                                                         <TableCell
                                                             className={cn(

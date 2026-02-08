@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
     Card,
     CardContent,
@@ -163,7 +164,12 @@ export function StatsLeaderboards({
                                             {i + 1}
                                         </TableCell>
                                         <TableCell className="min-w-0 font-medium">
-                                            <span className="truncate">{p.name}</span>
+                                            <Link
+                                                href={`/players/${p.playerId}`}
+                                                className="truncate text-primary hover:underline"
+                                            >
+                                                {p.name}
+                                            </Link>
                                         </TableCell>
                                         <TableCell
                                             className={cn(

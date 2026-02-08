@@ -27,11 +27,11 @@ export type SeasonSummary = {
     totalProfitCents: number;
     players: SeasonPlayerRow[];
     /** Top by profit this season */
-    topWinner: { name: string; profitCents: number } | null;
+    topWinner: { name: string; playerId: string; profitCents: number } | null;
     /** Top by ROI this season (min 1 game) */
-    bestROI: { name: string; roi: number } | null;
+    bestROI: { name: string; playerId: string; roi: number } | null;
     /** Top by season score this season */
-    bestPerformer: { name: string; seasonScore: number } | null;
+    bestPerformer: { name: string; playerId: string; seasonScore: number } | null;
 };
 
 export type SeasonPlayerRow = {

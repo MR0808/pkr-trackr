@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     formatCurrency,
@@ -227,7 +228,12 @@ export function ResultsList({
                                         className="max-w-16 truncate p-1 font-medium"
                                         title={row.player.name}
                                     >
-                                        {row.player.name}
+                                        <Link
+                                            href={`/players/${row.player.id}`}
+                                            className="text-primary hover:underline"
+                                        >
+                                            {row.player.name}
+                                        </Link>
                                     </TableCell>
                                     <TableCell
                                         className={cn(
@@ -394,7 +400,12 @@ export function ResultsList({
                                                 {index + 1}
                                             </div>
                                             <CardTitle className="truncate text-lg lg:text-xl">
-                                                {player.name}
+                                                <Link
+                                                    href={`/players/${player.id}`}
+                                                    className="text-primary hover:underline"
+                                                >
+                                                    {player.name}
+                                                </Link>
                                             </CardTitle>
                                         </div>
                                         <div className="flex shrink-0 flex-col items-end gap-0.5">

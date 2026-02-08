@@ -314,9 +314,9 @@ export async function loadStatsPageData(): Promise<StatsPageData | null> {
             totalCashOutCents: seg.totalCashOutCents,
             totalProfitCents: seg.totalProfitCents,
             players: playerRows,
-            topWinner: sortedByProfit[0] ? { name: sortedByProfit[0].name, profitCents: sortedByProfit[0].totalProfitCents } : null,
-            bestROI: sortedByROI[0] ? { name: sortedByROI[0].name, roi: sortedByROI[0].roi! } : null,
-            bestPerformer: sortedByScore[0] ? { name: sortedByScore[0].name, seasonScore: sortedByScore[0].seasonScore! } : null
+            topWinner: sortedByProfit[0] ? { name: sortedByProfit[0].name, playerId: sortedByProfit[0].playerId, profitCents: sortedByProfit[0].totalProfitCents } : null,
+            bestROI: sortedByROI[0] ? { name: sortedByROI[0].name, playerId: sortedByROI[0].playerId, roi: sortedByROI[0].roi! } : null,
+            bestPerformer: sortedByScore[0] ? { name: sortedByScore[0].name, playerId: sortedByScore[0].playerId, seasonScore: sortedByScore[0].seasonScore! } : null
         });
     }
     seasons.sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import {
     Target,
     Zap,
@@ -88,7 +89,16 @@ export function StatsAwardsSection({ awards }: { awards: StatsAwards }) {
                                 {value ? (
                                     <>
                                         <div className="text-2xl font-bold">
-                                            {getValue(value)}
+                                            {'playerId' in value && value.playerId ? (
+                                                <Link
+                                                    href={`/players/${value.playerId}`}
+                                                    className="text-primary hover:underline"
+                                                >
+                                                    {getValue(value)}
+                                                </Link>
+                                            ) : (
+                                                getValue(value)
+                                            )}
                                         </div>
                                         {sub && (
                                             <p className="text-xs text-muted-foreground">
