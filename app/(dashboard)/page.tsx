@@ -2,35 +2,30 @@ import Link from 'next/link';
 import {
     ArrowRight,
     Gamepad2,
-    TrendingUp,
-    Users,
     DollarSign,
-    Plus,
+    Users,
+    Flame,
     Trophy,
     Zap,
-    Activity
+    TrendingUp,
+    Plus,
+    Calendar
 } from 'lucide-react';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { loadDashboardPageData } from '@/actions/games';
+import { loadLeaguePulseData } from '@/actions/games';
 import { getDefaultGroupId } from '@/lib/default-group';
-import { formatCurrency, formatCurrencyWithSign, formatPercent } from '@/lib/money';
+import {
+    formatCurrency,
+    formatCurrencyWithSign,
+    formatPercent
+} from '@/lib/money';
 import { format } from 'date-fns';
-import { MomentumChart } from '@/components/dashboard/MomentumChart';
+import { BalanceSnapshot } from '@/components/dashboard/BalanceSnapshot';
 
 export default async function DashboardPage() {
     const groupId = await getDefaultGroupId();
-    const data = await loadDashboardPageData({ groupId });
-
-    const kpis = data.seasonKpis;
-    const seasonName = data.currentSeason?.name ?? 'Season summary';
+    const data = await loadLeaguePulseData({ groupId });
 
     return (
         <div className="container mx-auto max-w-5xl space-y-8 px-4 py-6 sm:px-6 lg:px-8">
@@ -38,10 +33,10 @@ export default async function DashboardPage() {
             <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                     <h1 className="truncate text-2xl font-bold tracking-tight sm:text-3xl">
-                        Dashboard
+                        League Pulse
                     </h1>
                     <p className="text-muted-foreground">
-                        League health and momentum at a glance
+                        Is the league active? Who&apos;s hot? What just happened?
                     </p>
                 </div>
                 <Button asChild size="lg" className="shrink-0">
@@ -52,167 +47,181 @@ export default async function DashboardPage() {
                 </Button>
             </div>
 
-            {/* 1. Season summary cards (4–6 KPIs) */}
+            {/* 1. League Health Strip */}
             <section className="min-w-0">
-                <h2 className="mb-4 text-lg font-semibold sm:text-xl">
-                    {seasonName}
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <Card className="min-w-0">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">
+                                Total nights played
+                            </CardTitle>
+                            <Gamepad2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">
+                                {data.health.totalNightsPlayed}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                All-time
+                            </p>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="min-w-0">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">
+                                Total money played
+                            </CardTitle>
+                            <DollarSign className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="truncate text-2xl font-bold">
+                                {formatCurrency(
+                                    data.health.totalMoneyPlayedCents / 100
+                                )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                All-time buy-ins
+                            </p>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="min-w-0">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">
+                                Avg night pot
+                            </CardTitle>
+                            <TrendingUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="truncate text-2xl font-bold">
+                                {formatCurrency(
+                                    data.health.averageNightPotLast10Cents / 100
+                                )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Last 10 nights
+                            </p>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="min-w-0">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">
+                                Active players
+                            </CardTitle>
+                            <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">
+                                {data.health.activePlayersLast30Days}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Last 30 days
+                            </p>
+                        </CardContent>
+                    </Card>
+                </div>
+            </section>
+
+            {/* 2. Momentum Panel — Who's Hot */}
+            <section className="min-w-0">
+                <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold sm:text-xl">
+                    <Flame className="h-5 w-5 text-amber-500" />
+                    Who&apos;s hot
                 </h2>
-                {kpis ? (
-                    <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                        <Card className="min-w-0">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">
-                                    Nights played
-                                </CardTitle>
-                                <Gamepad2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">
-                                    {kpis.totalGames}
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                    Closed games this season
-                                </p>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="min-w-0">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">
-                                    Players
-                                </CardTitle>
-                                <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">
-                                    {kpis.uniquePlayers}
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                    Unique this season
-                                </p>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="min-w-0">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">
-                                    Total buy-ins
-                                </CardTitle>
-                                <DollarSign className="h-4 w-4 shrink-0 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="truncate text-2xl font-bold">
-                                    {formatCurrency(kpis.totalBuyInCents / 100)}
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                    Money in this season
-                                </p>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="min-w-0">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">
-                                    Net (season)
-                                </CardTitle>
-                                <TrendingUp className="h-4 w-4 shrink-0 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div
-                                    className={
-                                        kpis.totalProfitCents === 0
-                                            ? 'text-2xl font-bold text-muted-foreground'
-                                            : kpis.totalProfitCents > 0
-                                              ? 'text-2xl font-bold text-[hsl(var(--success))]'
-                                              : 'text-2xl font-bold text-destructive'
-                                    }
-                                >
-                                    {formatCurrencyWithSign(
-                                        kpis.totalProfitCents / 100
-                                    )}
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                    Out − In this season
-                                </p>
-                            </CardContent>
-                        </Card>
-                    </div>
+                {data.hotPlayers.length > 0 ? (
+                    <Card className="min-w-0 overflow-hidden">
+                        <CardContent className="p-0">
+                            <ul className="divide-y">
+                                {data.hotPlayers.map((player, i) => (
+                                    <li key={player.playerId}>
+                                        <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:flex-nowrap">
+                                            <div className="flex min-w-0 items-center gap-3">
+                                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold">
+                                                    {i + 1}
+                                                </span>
+                                                <Link
+                                                    href={`/players/${player.playerId}`}
+                                                    className="truncate font-medium text-primary hover:underline"
+                                                >
+                                                    {player.name}
+                                                </Link>
+                                                {player.currentStreak !== 0 && (
+                                                    <span
+                                                        className={
+                                                            player.currentStreak > 0
+                                                                ? 'text-xs text-[hsl(var(--success))]'
+                                                                : 'text-xs text-destructive'
+                                                        }
+                                                    >
+                                                        {player.currentStreak > 0
+                                                            ? `${player.currentStreak}W`
+                                                            : `${Math.abs(player.currentStreak)}L`}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex shrink-0 gap-4 tabular-nums text-sm">
+                                                <span
+                                                    className={
+                                                        player.profitCents >= 0
+                                                            ? 'text-[hsl(var(--success))]'
+                                                            : 'text-destructive'
+                                                    }
+                                                >
+                                                    {formatCurrencyWithSign(
+                                                        player.profitCents / 100
+                                                    )}{' '}
+                                                    <span className="text-muted-foreground">
+                                                        (last 10)
+                                                    </span>
+                                                </span>
+                                                {player.roi != null && (
+                                                    <span className="text-muted-foreground">
+                                                        {formatPercent(player.roi)}{' '}
+                                                        ROI
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </CardContent>
+                        <p className="border-t px-4 py-2 text-xs text-muted-foreground">
+                            Last 10 nights · profit & ROI
+                        </p>
+                    </Card>
                 ) : (
                     <Card className="min-w-0">
-                        <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-                            <Gamepad2 className="mb-2 h-10 w-10 text-muted-foreground" />
-                            <p className="text-sm font-medium">
-                                No closed games this season yet
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                                Close a game to see season KPIs
-                            </p>
+                        <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                            No closed nights yet. Close a game to see who&apos;s
+                            hot.
                         </CardContent>
                     </Card>
                 )}
             </section>
 
-            {/* 2. Momentum chart */}
-            {data.momentumData.length > 0 && (
-                <section className="min-w-0">
-                    <h2 className="mb-4 text-lg font-semibold sm:text-xl">
-                        Momentum
-                    </h2>
-                    <MomentumChart
-                        momentumData={data.momentumData}
-                        momentumPlayerNames={data.momentumPlayerNames}
-                    />
-                </section>
-            )}
-
-            {/* 3. Recent activity */}
+            {/* 3. Recent Nights Timeline */}
             <section className="min-w-0">
-                <h2 className="mb-4 text-lg font-semibold sm:text-xl">
-                    Recent activity
+                <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold sm:text-xl">
+                    <Calendar className="h-5 w-5" />
+                    Recent nights
                 </h2>
-                <Card className="min-w-0 overflow-hidden">
-                    <CardContent className="p-0">
-                        {data.recentNights.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-12 text-center">
-                                <Gamepad2 className="mb-4 h-12 w-12 text-muted-foreground" />
-                                <p className="text-lg font-medium">
-                                    No games yet
-                                </p>
-                                <p className="mb-4 text-sm text-muted-foreground">
-                                    Start your first game to begin tracking
-                                </p>
-                                <Button asChild>
-                                    <Link href="/">
-                                        <Plus className="mr-2 h-4 w-4" />
-                                        Create Game
-                                    </Link>
-                                </Button>
-                            </div>
-                        ) : (
+                {data.recentNights.length > 0 ? (
+                    <Card className="min-w-0 overflow-hidden">
+                        <CardContent className="p-0">
                             <ul className="divide-y">
                                 {data.recentNights.map((night) => (
-                                    <li key={night.id}>
-                                        <Link
-                                            href={`/games/${night.id}`}
-                                            className="flex flex-col gap-2 p-4 transition-colors hover:bg-accent sm:flex-row sm:items-center sm:justify-between"
-                                        >
+                                    <li key={night.gameId}>
+                                        <div className="flex flex-col gap-1 p-4 transition-colors hover:bg-accent sm:flex-row sm:items-center sm:justify-between">
                                             <div className="min-w-0">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-medium">
-                                                        {night.name}
-                                                    </span>
-                                                    <Badge
-                                                        variant={
-                                                            night.status ===
-                                                            'OPEN'
-                                                                ? 'default'
-                                                                : 'secondary'
-                                                        }
-                                                        className="text-xs"
-                                                    >
-                                                        {night.status}
-                                                    </Badge>
-                                                </div>
+                                                <Link
+                                                    href={`/games/${night.gameId}`}
+                                                    className="font-medium hover:underline"
+                                                >
+                                                    {night.gameName}
+                                                </Link>
                                                 <p className="text-sm text-muted-foreground">
                                                     {format(
                                                         new Date(
@@ -220,23 +229,43 @@ export default async function DashboardPage() {
                                                         ),
                                                         'MMM d, yyyy'
                                                     )}{' '}
-                                                    · {night.playerCount}{' '}
+                                                    ·{' '}
+                                                    {formatCurrency(
+                                                        night.totalPotCents / 100
+                                                    )}{' '}
+                                                    pot · {night.playerCount}{' '}
                                                     players
                                                 </p>
+                                                {night.biggestWinner && (
+                                                    <p className="mt-1 text-xs text-[hsl(var(--success))]">
+                                                        Biggest winner:{' '}
+                                                        <Link
+                                                            href={`/players/${night.biggestWinner.playerId}`}
+                                                            className="font-medium text-primary hover:underline"
+                                                        >
+                                                            {night.biggestWinner.name}
+                                                        </Link>{' '}
+                                                        (
+                                                        {formatCurrencyWithSign(
+                                                            night.biggestWinner
+                                                                .profitCents / 100
+                                                        )}
+                                                        )
+                                                    </p>
+                                                )}
                                             </div>
-                                            <span className="flex shrink-0 items-center text-sm text-primary">
-                                                {night.status === 'OPEN'
-                                                    ? 'Open'
-                                                    : 'View'}
+                                            <Link
+                                                href={`/games/${night.gameId}`}
+                                                className="flex shrink-0 items-center text-sm text-primary hover:underline"
+                                            >
+                                                View
                                                 <ArrowRight className="ml-1 h-4 w-4" />
-                                            </span>
-                                        </Link>
+                                            </Link>
+                                        </div>
                                     </li>
                                 ))}
                             </ul>
-                        )}
-                    </CardContent>
-                    {data.recentNights.length > 0 && (
+                        </CardContent>
                         <div className="border-t px-4 py-2">
                             <Button asChild variant="ghost" size="sm">
                                 <Link href="/games">
@@ -245,83 +274,137 @@ export default async function DashboardPage() {
                                 </Link>
                             </Button>
                         </div>
-                    )}
-                </Card>
+                    </Card>
+                ) : (
+                    <Card className="min-w-0">
+                        <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                            <Gamepad2 className="mb-4 h-12 w-12 text-muted-foreground" />
+                            <p className="text-lg font-medium">
+                                No nights yet
+                            </p>
+                            <p className="mb-4 text-sm text-muted-foreground">
+                                Start your first game to see the heartbeat here
+                            </p>
+                            <Button asChild>
+                                <Link href="/">
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Create Game
+                                </Link>
+                            </Button>
+                        </CardContent>
+                    </Card>
+                )}
             </section>
 
-            {/* 4. Quick highlights */}
-            {(data.highlights.roiLeader ||
-                data.highlights.biggestSingleNightWin ||
-                data.highlights.mostActivePlayer) && (
-                <section className="min-w-0">
-                    <h2 className="mb-4 text-lg font-semibold sm:text-xl">
-                        Quick highlights
-                    </h2>
-                    <div className="flex min-w-0 flex-wrap gap-4 rounded-lg border bg-card p-4">
-                        {data.highlights.roiLeader && (
-                            <div className="flex items-center gap-2">
-                                <Trophy className="h-4 w-4 shrink-0 text-amber-500" />
-                                <span className="text-sm text-muted-foreground">
-                                    ROI leader:
-                                </span>
-                                <Link
-                                    href={`/players/${data.highlights.roiLeader.playerId}`}
-                                    className="font-medium text-primary hover:underline"
-                                >
-                                    {data.highlights.roiLeader.name}
-                                </Link>
-                                <span className="text-sm tabular-nums">
-                                    {formatPercent(
-                                        data.highlights.roiLeader.roi
-                                    )}
-                                </span>
-                            </div>
-                        )}
-                        {data.highlights.biggestSingleNightWin && (
+            {/* 4. Big Moments */}
+            <section className="min-w-0">
+                <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold sm:text-xl">
+                    <Trophy className="h-5 w-5 text-amber-500" />
+                    Big moments
+                </h2>
+                <Card className="min-w-0">
+                    <CardContent className="flex flex-wrap gap-x-6 gap-y-4 py-4">
+                        {data.bigMoments.biggestSingleNightWin && (
                             <div className="flex items-center gap-2">
                                 <Zap className="h-4 w-4 shrink-0 text-[hsl(var(--success))]" />
                                 <span className="text-sm text-muted-foreground">
                                     Biggest night:
                                 </span>
                                 <Link
-                                    href={`/players/${data.highlights.biggestSingleNightWin.playerId}`}
+                                    href={`/players/${data.bigMoments.biggestSingleNightWin.playerId}`}
                                     className="font-medium text-primary hover:underline"
                                 >
-                                    {data.highlights.biggestSingleNightWin.name}
+                                    {data.bigMoments.biggestSingleNightWin.name}
                                 </Link>
                                 <span className="text-sm tabular-nums text-[hsl(var(--success))]">
                                     {formatCurrencyWithSign(
-                                        data.highlights.biggestSingleNightWin
+                                        data.bigMoments.biggestSingleNightWin
                                             .profitCents / 100
                                     )}
                                 </span>
-                                <span className="text-xs text-muted-foreground">
-                                    ({data.highlights.biggestSingleNightWin.gameName})
-                                </span>
                             </div>
                         )}
-                        {data.highlights.mostActivePlayer && (
+                        {data.bigMoments.largestPotEver && (
                             <div className="flex items-center gap-2">
-                                <Activity className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                <DollarSign className="h-4 w-4 shrink-0 text-muted-foreground" />
                                 <span className="text-sm text-muted-foreground">
-                                    Most active:
+                                    Largest pot:
                                 </span>
                                 <Link
-                                    href={`/players/${data.highlights.mostActivePlayer.playerId}`}
+                                    href={`/games/${data.bigMoments.largestPotEver.gameId}`}
                                     className="font-medium text-primary hover:underline"
                                 >
-                                    {data.highlights.mostActivePlayer.name}
-                                </Link>
-                                <span className="text-sm tabular-nums text-muted-foreground">
                                     {formatCurrency(
-                                        data.highlights.mostActivePlayer
-                                            .totalBuyInCents / 100
-                                    )}{' '}
-                                    in
+                                        data.bigMoments.largestPotEver.totalPotCents /
+                                            100
+                                    )}
+                                </Link>
+                                <span className="text-xs text-muted-foreground">
+                                    ({data.bigMoments.largestPotEver.gameName})
                                 </span>
                             </div>
                         )}
-                    </div>
+                        {data.bigMoments.longestWinStreak && (
+                            <div className="flex items-center gap-2">
+                                <TrendingUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">
+                                    Longest streak:
+                                </span>
+                                <Link
+                                    href={`/players/${data.bigMoments.longestWinStreak.playerId}`}
+                                    className="font-medium text-primary hover:underline"
+                                >
+                                    {data.bigMoments.longestWinStreak.name}
+                                </Link>
+                                <span className="text-sm tabular-nums">
+                                    {data.bigMoments.longestWinStreak.streak}{' '}
+                                    wins
+                                </span>
+                            </div>
+                        )}
+                        {data.bigMoments.mostProfitableAllTime && (
+                            <div className="flex items-center gap-2">
+                                <Trophy className="h-4 w-4 shrink-0 text-amber-500" />
+                                <span className="text-sm text-muted-foreground">
+                                    Most profitable:
+                                </span>
+                                <Link
+                                    href={`/players/${data.bigMoments.mostProfitableAllTime.playerId}`}
+                                    className="font-medium text-primary hover:underline"
+                                >
+                                    {data.bigMoments.mostProfitableAllTime.name}
+                                </Link>
+                                <span className="text-sm tabular-nums text-[hsl(var(--success))]">
+                                    {formatCurrencyWithSign(
+                                        data.bigMoments.mostProfitableAllTime
+                                            .totalProfitCents / 100
+                                    )}
+                                </span>
+                            </div>
+                        )}
+                        {!data.bigMoments.biggestSingleNightWin &&
+                            !data.bigMoments.largestPotEver &&
+                            !data.bigMoments.longestWinStreak &&
+                            !data.bigMoments.mostProfitableAllTime && (
+                                <p className="text-sm text-muted-foreground">
+                                    Close some games to see big moments.
+                                </p>
+                            )}
+                    </CardContent>
+                </Card>
+            </section>
+
+            {/* 5. League Balance Snapshot */}
+            {data.balance.length > 0 && (
+                <section className="min-w-0">
+                    <h2 className="mb-4 text-lg font-semibold sm:text-xl">
+                        League balance
+                    </h2>
+                    <Card className="min-w-0">
+                        <CardContent className="pt-4">
+                            <BalanceSnapshot players={data.balance} />
+                        </CardContent>
+                    </Card>
                 </section>
             )}
         </div>

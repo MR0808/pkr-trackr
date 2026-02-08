@@ -455,6 +455,366 @@ export async function loadDashboardPageData(opts: {
     };
 }
 
+// --- League Pulse (season-agnostic dashboard) ---
+
+const MOMENTUM_NIGHTS = 10;
+const RECENT_NIGHTS_TAKE = 10;
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
+export type LeagueHealthStrip = {
+    totalNightsPlayed: number;
+    totalMoneyPlayedCents: number;
+    averageNightPotLast10Cents: number;
+    activePlayersLast30Days: number;
+};
+
+export type HotPlayer = {
+    playerId: string;
+    name: string;
+    profitCents: number;
+    roi: number | null;
+    /** Positive = wins, negative = losses (from most recent night) */
+    currentStreak: number;
+};
+
+export type RecentNightRow = {
+    gameId: string;
+    gameName: string;
+    scheduledAt: Date;
+    totalPotCents: number;
+    playerCount: number;
+    biggestWinner: { playerId: string; name: string; profitCents: number } | null;
+};
+
+export type BigMoments = {
+    biggestSingleNightWin: {
+        name: string;
+        playerId: string;
+        profitCents: number;
+        gameId: string;
+        gameName: string;
+    } | null;
+    largestPotEver: { totalPotCents: number; gameId: string; gameName: string } | null;
+    longestWinStreak: { name: string; playerId: string; streak: number } | null;
+    mostProfitableAllTime: { name: string; playerId: string; totalProfitCents: number } | null;
+};
+
+export type BalancePlayer = {
+    playerId: string;
+    name: string;
+    totalProfitCents: number;
+};
+
+export type LeaguePulseData = {
+    health: LeagueHealthStrip;
+    hotPlayers: HotPlayer[];
+    recentNights: RecentNightRow[];
+    bigMoments: BigMoments;
+    balance: BalancePlayer[];
+};
+
+export async function loadLeaguePulseData(opts: {
+    groupId: string;
+}): Promise<LeaguePulseData> {
+    const { groupId } = opts;
+    if (!groupId) throw new Error('groupId is required');
+
+    const closedGames = await prisma.game.findMany({
+        where: { groupId, status: 'CLOSED' },
+        orderBy: { scheduledAt: 'desc' },
+        take: 400,
+        select: {
+            id: true,
+            name: true,
+            scheduledAt: true,
+            players: {
+                select: {
+                    playerId: true,
+                    buyInCents: true,
+                    cashOutCents: true,
+                    adjustmentCents: true,
+                    player: { select: { name: true } }
+                }
+            }
+        }
+    });
+
+    const now = Date.now();
+    const thirtyDaysAgo = new Date(now - THIRTY_DAYS_MS);
+
+    // Per-game totals and per-player profit
+    type GameRow = {
+        id: string;
+        name: string;
+        scheduledAt: Date;
+        totalPotCents: number;
+        playerCount: number;
+        profits: { playerId: string; name: string; profitCents: number }[];
+    };
+    const games: GameRow[] = closedGames.map((g) => {
+        const profits: GameRow['profits'] = [];
+        let totalPotCents = 0;
+        for (const gp of g.players) {
+            const cash = gp.cashOutCents ?? 0;
+            const profitCents = cash - gp.buyInCents - gp.adjustmentCents;
+            totalPotCents += gp.buyInCents;
+            profits.push({
+                playerId: gp.playerId,
+                name: gp.player.name,
+                profitCents
+            });
+        }
+        return {
+            id: g.id,
+            name: g.name,
+            scheduledAt: g.scheduledAt,
+            totalPotCents,
+            playerCount: g.players.length,
+            profits
+        };
+    });
+
+    if (games.length === 0) {
+        return {
+            health: {
+                totalNightsPlayed: 0,
+                totalMoneyPlayedCents: 0,
+                averageNightPotLast10Cents: 0,
+                activePlayersLast30Days: 0
+            },
+            hotPlayers: [],
+            recentNights: [],
+            bigMoments: {
+                biggestSingleNightWin: null,
+                largestPotEver: null,
+                longestWinStreak: null,
+                mostProfitableAllTime: null
+            },
+            balance: []
+        };
+    }
+
+    // Health strip
+    const totalMoneyPlayedCents = games.reduce((s, g) => s + g.totalPotCents, 0);
+    const last10 = games.slice(0, 10);
+    const averageNightPotLast10Cents =
+        last10.length > 0
+            ? last10.reduce((s, g) => s + g.totalPotCents, 0) / last10.length
+            : 0;
+    const gamesLast30 = games.filter(
+        (g) => new Date(g.scheduledAt) >= thirtyDaysAgo
+    );
+    const activePlayersLast30Days = new Set(
+        gamesLast30.flatMap((g) => g.profits.map((p) => p.playerId))
+    ).size;
+
+    const health: LeagueHealthStrip = {
+        totalNightsPlayed: games.length,
+        totalMoneyPlayedCents,
+        averageNightPotLast10Cents: Math.round(averageNightPotLast10Cents),
+        activePlayersLast30Days
+    };
+
+    // Momentum: last N nights, top 5 hottest (by profit in those nights)
+    const momentumGames = games.slice(0, MOMENTUM_NIGHTS);
+    const momentumByPlayer = new Map<
+        string,
+        {
+            name: string;
+            profitCents: number;
+            buyInCents: number;
+            gameProfits: number[]; // most recent first
+        }
+    >();
+    for (const g of momentumGames) {
+        for (const p of g.profits) {
+            let rec = momentumByPlayer.get(p.playerId);
+            if (!rec) {
+                rec = {
+                    name: p.name,
+                    profitCents: 0,
+                    buyInCents: 0,
+                    gameProfits: []
+                };
+                momentumByPlayer.set(p.playerId, rec);
+            }
+            rec.profitCents += p.profitCents;
+            // buy-in for this game
+            const gp = closedGames.find((x) => x.id === g.id)?.players.find(
+                (x) => x.playerId === p.playerId
+            );
+            if (gp) rec.buyInCents += gp.buyInCents;
+            rec.gameProfits.push(p.profitCents);
+        }
+    }
+    // Current streak: from most recent game, count consecutive same-sign results
+    function getStreak(gameProfits: number[]): number {
+        if (gameProfits.length === 0) return 0;
+        const sign = gameProfits[0] > 0 ? 1 : gameProfits[0] < 0 ? -1 : 0;
+        if (sign === 0) return 0;
+        let count = 0;
+        for (const p of gameProfits) {
+            const s = p > 0 ? 1 : p < 0 ? -1 : 0;
+            if (s !== sign) break;
+            count++;
+        }
+        return sign * count;
+    }
+    const hotPlayers: HotPlayer[] = [...momentumByPlayer.entries()]
+        .map(([playerId, rec]) => ({
+            playerId,
+            name: rec.name,
+            profitCents: rec.profitCents,
+            roi:
+                rec.buyInCents > 0
+                    ? rec.profitCents / rec.buyInCents
+                    : null,
+            currentStreak: getStreak(rec.gameProfits)
+        }))
+        .sort((a, b) => b.profitCents - a.profitCents)
+        .slice(0, 5);
+
+    // Recent nights timeline
+    const recentNights: RecentNightRow[] = games
+        .slice(0, RECENT_NIGHTS_TAKE)
+        .map((g) => {
+            const winner = g.profits.filter((p) => p.profitCents > 0).sort(
+                (a, b) => b.profitCents - a.profitCents
+            )[0] ?? null;
+            return {
+                gameId: g.id,
+                gameName: g.name,
+                scheduledAt: g.scheduledAt,
+                totalPotCents: g.totalPotCents,
+                playerCount: g.playerCount,
+                biggestWinner: winner
+            };
+        });
+
+    // Big moments (all-time from `games`)
+    let biggestSingleNightWin: BigMoments['biggestSingleNightWin'] = null;
+    for (const g of games) {
+        for (const p of g.profits) {
+            if (
+                p.profitCents > 0 &&
+                (!biggestSingleNightWin ||
+                    p.profitCents > biggestSingleNightWin.profitCents)
+            ) {
+                biggestSingleNightWin = {
+                    name: p.name,
+                    playerId: p.playerId,
+                    profitCents: p.profitCents,
+                    gameId: g.id,
+                    gameName: g.name
+                };
+            }
+        }
+    }
+    const largestPotGame = games.reduce((best, g) =>
+        !best || g.totalPotCents > best.totalPotCents ? g : best
+    );
+    const largestPotEver: BigMoments['largestPotEver'] = largestPotGame
+        ? {
+              totalPotCents: largestPotGame.totalPotCents,
+              gameId: largestPotGame.id,
+              gameName: largestPotGame.name
+          }
+        : null;
+
+    // Longest win streak: per player, all games chronologically (oldest first for streak)
+    const gamesAsc = [...games].reverse();
+    const playerGameProfits = new Map<string, number[]>();
+    for (const g of gamesAsc) {
+        for (const p of g.profits) {
+            const list = playerGameProfits.get(p.playerId) ?? [];
+            list.push(p.profitCents);
+            playerGameProfits.set(p.playerId, list);
+        }
+    }
+    function maxConsecutiveWins(profits: number[]): number {
+        let max = 0;
+        let cur = 0;
+        for (const p of profits) {
+            if (p > 0) {
+                cur++;
+                max = Math.max(max, cur);
+            } else {
+                cur = 0;
+            }
+        }
+        return max;
+    }
+    let longestWinStreak: BigMoments['longestWinStreak'] = null;
+    const playerNames = new Map<string, string>();
+    for (const g of games) {
+        for (const p of g.profits) {
+            playerNames.set(p.playerId, p.name);
+        }
+    }
+    for (const [playerId, list] of playerGameProfits) {
+        const streak = maxConsecutiveWins(list);
+        if (
+            streak > 0 &&
+            (!longestWinStreak || streak > longestWinStreak.streak)
+        ) {
+            longestWinStreak = {
+                name: playerNames.get(playerId) ?? 'Unknown',
+                playerId,
+                streak
+            };
+        }
+    }
+
+    // Most profitable all-time
+    const allTimeProfit = new Map<string, { name: string; totalProfitCents: number }>();
+    for (const g of games) {
+        for (const p of g.profits) {
+            const rec = allTimeProfit.get(p.playerId);
+            if (!rec) {
+                allTimeProfit.set(p.playerId, {
+                    name: p.name,
+                    totalProfitCents: p.profitCents
+                });
+            } else {
+                rec.totalProfitCents += p.profitCents;
+            }
+        }
+    }
+    const mostProfitableEntry = [...allTimeProfit.entries()].sort(
+        (a, b) => b[1].totalProfitCents - a[1].totalProfitCents
+    )[0];
+    const mostProfitableAllTime: BigMoments['mostProfitableAllTime'] =
+        mostProfitableEntry && mostProfitableEntry[1].totalProfitCents > 0
+            ? {
+                  name: mostProfitableEntry[1].name,
+                  playerId: mostProfitableEntry[0],
+                  totalProfitCents: mostProfitableEntry[1].totalProfitCents
+              }
+            : null;
+
+    // Balance: all-time profit per player (for snapshot)
+    const balance: BalancePlayer[] = [...allTimeProfit.entries()].map(
+        ([playerId, rec]) => ({
+            playerId,
+            name: rec.name,
+            totalProfitCents: rec.totalProfitCents
+        })
+    );
+
+    return {
+        health,
+        hotPlayers,
+        recentNights,
+        bigMoments: {
+            biggestSingleNightWin,
+            largestPotEver,
+            longestWinStreak,
+            mostProfitableAllTime
+        },
+        balance
+    };
+}
+
 const GAMES_LIST_TAKE = 500;
 
 export async function loadGamesListPageData(opts: {

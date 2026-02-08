@@ -1,5 +1,6 @@
 import { loadStatsPageData } from '@/actions/stats';
 import { StatsPageClient } from '@/components/stats/StatsPageClient';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default async function StatsPage() {
     const data = await loadStatsPageData();
@@ -16,7 +17,18 @@ export default async function StatsPage() {
                 </p>
             </div>
 
-            <StatsPageClient data={data} />
+            {data ? (
+                <StatsPageClient data={data} />
+            ) : (
+                <Card>
+                    <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                        <p className="text-lg font-medium">No stats yet</p>
+                        <p className="text-sm text-muted-foreground">
+                            Close at least one game to see stats.
+                        </p>
+                    </CardContent>
+                </Card>
+            )}
         </div>
     );
 }
