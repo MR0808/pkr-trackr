@@ -82,4 +82,16 @@ export type StatsPageData = {
     };
     seasons: SeasonSummary[];
     awards: StatsAwards;
+    /** League health overview: avg pot, most recent winner */
+    leagueHealth: {
+        averagePotCents: number;
+        mostRecentWinner: {
+            gameId: string;
+            gameName: string;
+            playerId: string;
+            name: string;
+        } | null;
+    };
+    /** Count of players with total profit > 0 vs <= 0 (all players with at least one game) */
+    profitDistribution: { profitable: number; nonProfitable: number };
 };

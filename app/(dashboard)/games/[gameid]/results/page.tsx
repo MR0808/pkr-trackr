@@ -1,9 +1,12 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { TotalsBar } from '@/components/games/view/TotalsBar';
 import { ResultsSection } from '@/components/games/view/ResultsSection';
 import { loadGame } from '@/actions/games';
 import { format } from 'date-fns';
+import { formatCurrencyWithSign } from '@/lib/money';
 
 interface ResultsPageProps {
     params: Promise<{
@@ -58,6 +61,42 @@ export default async function ResultsPage({ params }: ResultsPageProps) {
                     />
                 </div>
             </div>
+
+            {/* Night overview: biggest winner */}
+            {game.players.length > 0 && (() => {
+                let winner = game.players[0]!;
+                for (const p of game.players) {
+                    if (p.net != null && (winner.net == null || p.net > winner.net))
+                        winner = p;
+                }
+                if (winner.net != null && winner.net > 0) {
+                    return (
+                        <div className="border-b bg-card">
+                            <div className="container mx-auto max-w-7xl px-4 py-4 lg:px-6">
+                                <Card className="border-0 bg-transparent shadow-none">
+                                    <CardContent className="py-0">
+                                        <p className="text-sm text-muted-foreground">
+                                            Biggest winner
+                                        </p>
+                                        <p className="mt-1 font-semibold">
+                                            <Link
+                                                href={`/players/${winner.id}`}
+                                                className="text-primary hover:underline"
+                                            >
+                                                {winner.name}
+                                            </Link>
+                                            <span className="ml-2 tabular-nums text-[hsl(var(--success))]">
+                                                {formatCurrencyWithSign(winner.net)}
+                                            </span>
+                                        </p>
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        </div>
+                    );
+                }
+                return null;
+            })()}
 
             {/* Results */}
             <div className="container mx-auto max-w-7xl px-4 py-6 lg:px-6">

@@ -506,12 +506,44 @@ export type BalancePlayer = {
     totalProfitCents: number;
 };
 
+export type CurrentStreakRow = {
+    playerId: string;
+    name: string;
+    streak: number;
+};
+
+export type BiggestWinnerRow = {
+    playerId: string;
+    name: string;
+    totalProfitCents: number;
+    roi: number | null;
+    winRateLast10: number | null;
+    totalBuyInCents: number;
+    totalGames: number;
+};
+
+export type HealthTrendSeries = {
+    playerId: string;
+    name: string;
+    data: number[];
+};
+
 export type LeaguePulseData = {
     health: LeagueHealthStrip;
     hotPlayers: HotPlayer[];
     recentNights: RecentNightRow[];
     bigMoments: BigMoments;
     balance: BalancePlayer[];
+    currentStreaks: {
+        winning: CurrentStreakRow[];
+        losing: CurrentStreakRow[];
+    };
+    biggestWinners: BiggestWinnerRow[];
+    healthTrendData: {
+        nightLabels: string[];
+        gameIds: string[];
+        series: HealthTrendSeries[];
+    };
 };
 
 export async function loadLeaguePulseData(opts: {
@@ -591,7 +623,10 @@ export async function loadLeaguePulseData(opts: {
                 longestWinStreak: null,
                 mostProfitableAllTime: null
             },
-            balance: []
+            balance: [],
+            currentStreaks: { winning: [], losing: [] },
+            biggestWinners: [],
+            healthTrendData: { nightLabels: [], gameIds: [], series: [] }
         };
     }
 
@@ -816,6 +851,93 @@ export async function loadLeaguePulseData(opts: {
             totalProfitCents: rec.totalProfitCents
         }));
 
+    // totalBuyInCents per player (from closedGames)
+    const totalBuyInCentsByPlayer = new Map<string, number>();
+    for (const g of closedGames) {
+        for (const gp of g.players) {
+            totalBuyInCentsByPlayer.set(
+                gp.playerId,
+                (totalBuyInCentsByPlayer.get(gp.playerId) ?? 0) + gp.buyInCents
+            );
+        }
+    }
+
+    // Current streaks: top 5 winning / losing (from most recent games)
+    const winningStreaks: CurrentStreakRow[] = [];
+    const losingStreaks: CurrentStreakRow[] = [];
+    for (const [playerId, rec] of momentumByPlayer) {
+        if ((totalGamesByPlayer.get(playerId) ?? 0) < minNights) continue;
+        const streak = getStreak(rec.gameProfits);
+        if (streak > 0) winningStreaks.push({ playerId, name: rec.name, streak });
+        if (streak < 0) losingStreaks.push({ playerId, name: rec.name, streak: Math.abs(streak) });
+    }
+    winningStreaks.sort((a, b) => b.streak - a.streak);
+    losingStreaks.sort((a, b) => b.streak - a.streak);
+
+    // Biggest winners: top 5 by total profit (all-time), with ROI, win rate last 10
+    const last10GameProfitsByPlayer = new Map<string, number[]>();
+    for (const g of momentumGames) {
+        for (const p of g.profits) {
+            const list = last10GameProfitsByPlayer.get(p.playerId) ?? [];
+            list.push(p.profitCents);
+            last10GameProfitsByPlayer.set(p.playerId, list);
+        }
+    }
+    const biggestWinners: BiggestWinnerRow[] = [...allTimeProfit.entries()]
+        .filter(([playerId]) => (totalGamesByPlayer.get(playerId) ?? 0) >= minNights)
+        .map(([playerId, rec]) => {
+            const totalBuyInCents = totalBuyInCentsByPlayer.get(playerId) ?? 0;
+            const last10 = last10GameProfitsByPlayer.get(playerId) ?? [];
+            const winsLast10 = last10.filter((c) => c > 0).length;
+            const winRateLast10 = last10.length > 0 ? winsLast10 / last10.length : null;
+            return {
+                playerId,
+                name: rec.name,
+                totalProfitCents: rec.totalProfitCents,
+                roi: totalBuyInCents > 0 ? rec.totalProfitCents / totalBuyInCents : null,
+                winRateLast10,
+                totalBuyInCents,
+                totalGames: totalGamesByPlayer.get(playerId) ?? 0
+            };
+        })
+        .sort((a, b) => b.totalProfitCents - a.totalProfitCents)
+        .slice(0, 5);
+
+    // League health trend: cumulative profit for top 5 players over last 10 nights (chronological)
+    const trendNights = 10;
+    const nightsForTrend = games.slice(0, trendNights);
+    const top5ForTrend = [...allTimeProfit.entries()]
+        .sort((a, b) => b[1].totalProfitCents - a[1].totalProfitCents)
+        .slice(0, 5);
+    const trendNightLabels: string[] = [];
+    const trendGameIds: string[] = [];
+    const seriesByPlayer = new Map<string, number[]>();
+    for (const [playerId, rec] of top5ForTrend) {
+        seriesByPlayer.set(playerId, []);
+    }
+    const chronological = [...nightsForTrend].reverse();
+    let cumulativeByPlayerTrend = new Map<string, number>();
+    for (const [playerId] of top5ForTrend) cumulativeByPlayerTrend.set(playerId, 0);
+    for (const g of chronological) {
+        trendNightLabels.push(format(new Date(g.scheduledAt), 'MMM d'));
+        trendGameIds.push(g.id);
+        for (const p of g.profits) {
+            if (cumulativeByPlayerTrend.has(p.playerId)) {
+                const cur = cumulativeByPlayerTrend.get(p.playerId)!;
+                cumulativeByPlayerTrend.set(p.playerId, cur + p.profitCents);
+            }
+        }
+        for (const [playerId] of top5ForTrend) {
+            const arr = seriesByPlayer.get(playerId)!;
+            arr.push(cumulativeByPlayerTrend.get(playerId) ?? 0);
+        }
+    }
+    const healthTrendSeries: HealthTrendSeries[] = top5ForTrend.map(([playerId, rec]) => ({
+        playerId,
+        name: rec.name,
+        data: seriesByPlayer.get(playerId) ?? []
+    }));
+
     return {
         health,
         hotPlayers,
@@ -826,7 +948,17 @@ export async function loadLeaguePulseData(opts: {
             longestWinStreak,
             mostProfitableAllTime
         },
-        balance
+        balance,
+        currentStreaks: {
+            winning: winningStreaks.slice(0, 5),
+            losing: losingStreaks.slice(0, 5)
+        },
+        biggestWinners,
+        healthTrendData: {
+            nightLabels: trendNightLabels,
+            gameIds: trendGameIds,
+            series: healthTrendSeries
+        }
     };
 }
 

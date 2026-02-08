@@ -55,7 +55,9 @@ export async function loadStatsPageData(): Promise<StatsPageData | null> {
                 podiumKing: null,
                 nightsWonLeader: null,
                 winRateLeader: null
-            }
+            },
+            leagueHealth: { averagePotCents: 0, mostRecentWinner: null },
+            profitDistribution: { profitable: 0, nonProfitable: 0 }
         };
     }
 
@@ -367,6 +369,27 @@ export async function loadStatsPageData(): Promise<StatsPageData | null> {
         winRateLeader: sortedWinRate[0] ? { name: sortedWinRate[0].name, playerId: sortedWinRate[0].playerId, winRate: sortedWinRate[0].winRate, games: sortedWinRate[0].totalGames } : null
     };
 
+    const averagePotCents = games.length > 0 ? Math.round(totalBuyInCents / games.length) : 0;
+    const lastGame = games.length > 0 ? games[games.length - 1]! : null;
+    const lastGameRank = lastGame ? perGameRank.get(lastGame.id) : undefined;
+    const lastGameWinner = lastGameRank?.find((r) => r.rank === 1);
+    const mostRecentWinner =
+        lastGame && lastGameWinner
+            ? {
+                  gameId: lastGame.id,
+                  gameName: lastGame.name,
+                  playerId: lastGameWinner.playerId,
+                  name: allTimeByPlayer.get(lastGameWinner.playerId)?.name ?? 'Unknown'
+              }
+            : null;
+
+    let profitableCount = 0;
+    let nonProfitableCount = 0;
+    for (const [, rec] of allTimeByPlayer) {
+        if (rec.totalProfitCents > 0) profitableCount++;
+        else nonProfitableCount++;
+    }
+
     return {
         allTime: {
             totalGames: games.length,
@@ -376,6 +399,8 @@ export async function loadStatsPageData(): Promise<StatsPageData | null> {
             players: allTimePlayers.sort((a, b) => b.totalProfitCents - a.totalProfitCents)
         },
         seasons,
-        awards
+        awards,
+        leagueHealth: { averagePotCents, mostRecentWinner },
+        profitDistribution: { profitable: profitableCount, nonProfitable: nonProfitableCount }
     };
 }

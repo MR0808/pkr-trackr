@@ -5,6 +5,8 @@ import { StatsSummary } from '@/components/stats/StatsSummary';
 import { StatsAwardsSection } from '@/components/stats/StatsAwardsSection';
 import { StatsLeaderboards } from '@/components/stats/StatsLeaderboards';
 import { StatsBySeason } from '@/components/stats/StatsBySeason';
+import { LeagueHealthOverview } from '@/components/stats/LeagueHealthOverview';
+import { ProfitDistributionChart } from '@/components/stats/ProfitDistributionChart';
 import type { StatsPageData, StatsAwards, SeasonSummary, SeasonPlayerRow } from '@/types/stats';
 
 function buildSeasonAwards(season: SeasonSummary): StatsAwards {
@@ -92,6 +94,18 @@ export function StatsPageClient({ data }: { data: StatsPageData }) {
                 </select>
             </div>
 
+            {scope === 'all' && (
+                <>
+                    <LeagueHealthOverview
+                        leagueHealth={data.leagueHealth}
+                        awards={data.awards}
+                    />
+                    <ProfitDistributionChart
+                        profitable={data.profitDistribution.profitable}
+                        nonProfitable={data.profitDistribution.nonProfitable}
+                    />
+                </>
+            )}
             <StatsSummary summary={summary} />
             <StatsAwardsSection awards={awards} />
             <StatsLeaderboards players={players} scopeLabel={scopeLabel} />

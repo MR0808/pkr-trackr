@@ -15,6 +15,15 @@ import {
     ChevronLeft,
     ChevronRight
 } from 'lucide-react';
+import {
+    CartesianGrid,
+    Line,
+    LineChart,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis
+} from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Table,
@@ -43,6 +52,9 @@ export function PlayerProfile({ data }: { data: PlayerProfileData }) {
         podiumPoints,
         winRate,
         nightsInProfit,
+        currentStreak,
+        longestWinStreak,
+        longestLoseStreak,
         recentGames
     } = data;
 
@@ -73,6 +85,27 @@ export function PlayerProfile({ data }: { data: PlayerProfileData }) {
                             {totalGames} night{totalGames !== 1 ? 's' : ''}{' '}
                             played
                         </p>
+                        {(currentStreak !== 0 || longestWinStreak > 0 || longestLoseStreak > 0) && (
+                            <p className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                {currentStreak !== 0 && (
+                                    <span
+                                        className={
+                                            currentStreak > 0
+                                                ? 'text-[hsl(var(--success))]'
+                                                : 'text-destructive'
+                                        }
+                                    >
+                                        Current: {currentStreak > 0 ? `${currentStreak}W` : `${Math.abs(currentStreak)}L`}
+                                    </span>
+                                )}
+                                {longestWinStreak > 0 && (
+                                    <span>Best streak: {longestWinStreak}W</span>
+                                )}
+                                {longestLoseStreak > 0 && (
+                                    <span>Longest L: {longestLoseStreak}</span>
+                                )}
+                            </p>
+                        )}
                     </div>
                 </div>
                 <div
@@ -151,6 +184,72 @@ export function PlayerProfile({ data }: { data: PlayerProfileData }) {
                 </Card>
             </div>
 
+            {/* Performance trend: cumulative profit over time */}
+            {recentGames.length > 0 && (() => {
+                const chrono = [...recentGames].reverse();
+                let cum = 0;
+                const chartData = chrono.map((g) => {
+                    cum += g.profitCents;
+                    return {
+                        label: format(new Date(g.scheduledAt), 'MMM d'),
+                        cumulative: cum / 100
+                    };
+                });
+                return (
+                    <Card className="min-w-0 overflow-hidden">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-base font-medium">
+                                Profit over time (cumulative)
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="h-[220px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart
+                                        data={chartData}
+                                        margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                                    >
+                                        <CartesianGrid
+                                            strokeDasharray="3 3"
+                                            className="stroke-muted"
+                                        />
+                                        <XAxis
+                                            dataKey="label"
+                                            tick={{ fontSize: 11 }}
+                                            className="text-muted-foreground"
+                                        />
+                                        <YAxis
+                                            tick={{ fontSize: 11 }}
+                                            className="text-muted-foreground"
+                                            tickFormatter={(v) => formatCurrencyWithSign(v)}
+                                        />
+                                        <Tooltip
+                                            contentStyle={{
+                                                borderRadius: 'var(--radius)',
+                                                border: '1px solid hsl(var(--border))'
+                                            }}
+                                            formatter={(value: number | undefined) => [
+                                                formatCurrencyWithSign(value ?? 0),
+                                                'Cumulative'
+                                            ]}
+                                            labelFormatter={(label) => `Night: ${label}`}
+                                        />
+                                        <Line
+                                            type="monotone"
+                                            dataKey="cumulative"
+                                            stroke="hsl(var(--primary))"
+                                            strokeWidth={2}
+                                            dot={{ r: 3 }}
+                                            connectNulls
+                                        />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </CardContent>
+                    </Card>
+                );
+            })()}
+
             {/* All games */}
             <Card className="min-w-0 overflow-hidden">
                 <CardHeader className="px-4 sm:px-6">
@@ -185,6 +284,12 @@ export function PlayerProfile({ data }: { data: PlayerProfileData }) {
                                             </TableHead>
                                             <TableHead className="text-right tabular-nums">
                                                 Result
+                                            </TableHead>
+                                            <TableHead className="hidden text-right tabular-nums sm:table-cell">
+                                                ROI
+                                            </TableHead>
+                                            <TableHead className="hidden text-right tabular-nums sm:table-cell">
+                                                Table share
                                             </TableHead>
                                             <TableHead className="hidden text-right tabular-nums sm:table-cell">
                                                 Score
@@ -236,6 +341,16 @@ export function PlayerProfile({ data }: { data: PlayerProfileData }) {
                                                 {formatCurrencyWithSign(
                                                     g.profitCents / 100
                                                 )}
+                                            </TableCell>
+                                            <TableCell className="hidden text-right tabular-nums sm:table-cell">
+                                                {g.roi != null
+                                                    ? formatPercent(g.roi)
+                                                    : '—'}
+                                            </TableCell>
+                                            <TableCell className="hidden text-right tabular-nums sm:table-cell">
+                                                {g.tableShare != null
+                                                    ? formatPercent(g.tableShare)
+                                                    : '—'}
                                             </TableCell>
                                             <TableCell className="hidden text-right tabular-nums sm:table-cell">
                                                 {g.nightScore.toFixed(1)}

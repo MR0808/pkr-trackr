@@ -9,10 +9,20 @@ import {
     Zap,
     TrendingUp,
     Plus,
-    Calendar
+    Calendar,
+    Award,
+    Activity
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow
+} from '@/components/ui/table';
 import { loadLeaguePulseData } from '@/actions/games';
 import { getDefaultGroupId } from '@/lib/default-group';
 import {
@@ -22,6 +32,7 @@ import {
 } from '@/lib/money';
 import { format } from 'date-fns';
 import { BalanceSnapshot } from '@/components/dashboard/BalanceSnapshot';
+import { LeagueHealthTrendChart } from '@/components/dashboard/LeagueHealthTrendChart';
 
 export default async function DashboardPage() {
     const groupId = await getDefaultGroupId();
@@ -402,6 +413,172 @@ export default async function DashboardPage() {
                     </CardContent>
                 </Card>
             </section>
+
+            {/* Current Streaks */}
+            <section className="min-w-0">
+                <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold sm:text-xl">
+                    <Activity className="h-5 w-5" />
+                    Current streaks
+                </h2>
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                    <Card className="min-w-0 overflow-hidden">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-[hsl(var(--success))]">
+                                Winning
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            {data.currentStreaks.winning.length > 0 ? (
+                                <ul className="divide-y">
+                                    {data.currentStreaks.winning.map((row) => (
+                                        <li key={row.playerId}>
+                                            <div className="flex items-center justify-between px-4 py-2">
+                                                <Link
+                                                    href={`/players/${row.playerId}`}
+                                                    className="font-medium text-primary hover:underline"
+                                                >
+                                                    {row.name}
+                                                </Link>
+                                                <span className="tabular-nums text-sm text-[hsl(var(--success))]">
+                                                    {row.streak}W
+                                                </span>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="px-4 py-3 text-sm text-muted-foreground">
+                                    No active winning streaks
+                                </p>
+                            )}
+                        </CardContent>
+                    </Card>
+                    <Card className="min-w-0 overflow-hidden">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-destructive">
+                                Losing
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            {data.currentStreaks.losing.length > 0 ? (
+                                <ul className="divide-y">
+                                    {data.currentStreaks.losing.map((row) => (
+                                        <li key={row.playerId}>
+                                            <div className="flex items-center justify-between px-4 py-2">
+                                                <Link
+                                                    href={`/players/${row.playerId}`}
+                                                    className="font-medium text-primary hover:underline"
+                                                >
+                                                    {row.name}
+                                                </Link>
+                                                <span className="tabular-nums text-sm text-destructive">
+                                                    {row.streak}L
+                                                </span>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="px-4 py-3 text-sm text-muted-foreground">
+                                    No active losing streaks
+                                </p>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            </section>
+
+            {/* Biggest Winners (all-time top 5) */}
+            <section className="min-w-0">
+                <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold sm:text-xl">
+                    <Award className="h-5 w-5 text-amber-500" />
+                    Biggest winners (all-time)
+                </h2>
+                {data.biggestWinners.length > 0 ? (
+                    <Card className="min-w-0 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Player</TableHead>
+                                        <TableHead className="text-right tabular-nums">
+                                            Total profit
+                                        </TableHead>
+                                        <TableHead className="text-right tabular-nums">
+                                            ROI
+                                        </TableHead>
+                                        <TableHead className="text-right tabular-nums">
+                                            Win rate (last 10)
+                                        </TableHead>
+                                        <TableHead className="text-right tabular-nums">
+                                            Buy-ins
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {data.biggestWinners.map((row) => (
+                                        <TableRow key={row.playerId}>
+                                            <TableCell className="font-medium">
+                                                <Link
+                                                    href={`/players/${row.playerId}`}
+                                                    className="text-primary hover:underline"
+                                                >
+                                                    {row.name}
+                                                </Link>
+                                            </TableCell>
+                                            <TableCell
+                                                className={
+                                                    row.totalProfitCents >= 0
+                                                        ? 'text-right tabular-nums text-[hsl(var(--success))]'
+                                                        : 'text-right tabular-nums text-destructive'
+                                                }
+                                            >
+                                                {formatCurrencyWithSign(
+                                                    row.totalProfitCents / 100
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-right tabular-nums text-muted-foreground">
+                                                {row.roi != null
+                                                    ? formatPercent(row.roi)
+                                                    : '—'}
+                                            </TableCell>
+                                            <TableCell className="text-right tabular-nums text-muted-foreground">
+                                                {row.winRateLast10 != null
+                                                    ? formatPercent(
+                                                          row.winRateLast10
+                                                      )
+                                                    : '—'}
+                                            </TableCell>
+                                            <TableCell className="text-right tabular-nums text-muted-foreground">
+                                                {formatCurrency(
+                                                    row.totalBuyInCents / 100
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </Card>
+                ) : (
+                    <Card className="min-w-0">
+                        <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                            No eligible players yet (min nights required for
+                            all-time stats).
+                        </CardContent>
+                    </Card>
+                )}
+            </section>
+
+            {/* League Health Trend chart */}
+            {/* {data.healthTrendData.series.length > 0 && (
+                <section className="min-w-0">
+                    <LeagueHealthTrendChart
+                        nightLabels={data.healthTrendData.nightLabels}
+                        series={data.healthTrendData.series}
+                    />
+                </section>
+            )} */}
 
             {/* 5. League Balance Snapshot */}
             {data.balance.length > 0 && (

@@ -134,6 +134,8 @@ export type PlayerRecentGame = {
     profitCents: number;
     nightScore: number;
     rank: number; // 1 = first by profit that night
+    roi: number | null; // profitCents / buyInCents for this night
+    tableShare: number | null; // buyInCents / totalPotCents for this night
 };
 
 export type PlayerProfileData = {
@@ -146,6 +148,12 @@ export type PlayerProfileData = {
     podiumPoints: number;
     winRate: number;
     nightsInProfit: number;
+    /** Current streak: positive = wins, negative = losses (from most recent game) */
+    currentStreak: number;
+    /** Longest consecutive winning streak (all-time) */
+    longestWinStreak: number;
+    /** Longest consecutive losing streak (all-time) */
+    longestLoseStreak: number;
     recentGames: PlayerRecentGame[];
 };
 
@@ -202,6 +210,10 @@ export async function loadPlayerProfile(
         const profitCents = cash - gp.buyInCents - gp.adjustmentCents;
         const score = nightScore(profitCents, gp.buyInCents);
 
+        const totalPotCents = g.players.reduce((s, p) => s + p.buyInCents, 0);
+        const roi = gp.buyInCents > 0 ? profitCents / gp.buyInCents : null;
+        const tableShare = totalPotCents > 0 ? gp.buyInCents / totalPotCents : null;
+
         const sorted = [...g.players].sort((a, b) => {
             const cashA = a.cashOutCents ?? 0;
             const cashB = b.cashOutCents ?? 0;
@@ -227,13 +239,47 @@ export async function loadPlayerProfile(
             cashOutCents: gp.cashOutCents,
             profitCents,
             nightScore: score,
-            rank
+            rank,
+            roi,
+            tableShare
         });
     }
 
     const roi =
         totalBuyInCents > 0 ? totalProfitCents / totalBuyInCents : null;
     const winRate = totalGames > 0 ? nightsWon / totalGames : 0;
+
+    // Current streak (from most recent game)
+    let currentStreak = 0;
+    if (allGames.length > 0) {
+        const sign = allGames[0].profitCents > 0 ? 1 : allGames[0].profitCents < 0 ? -1 : 0;
+        for (const g of allGames) {
+            const s = g.profitCents > 0 ? 1 : g.profitCents < 0 ? -1 : 0;
+            if (s !== sign) break;
+            currentStreak += sign;
+        }
+    }
+
+    // Longest win/lose streaks (chronological: oldest first)
+    const chrono = [...allGames].reverse();
+    let longestWinStreak = 0;
+    let longestLoseStreak = 0;
+    let curWin = 0;
+    let curLose = 0;
+    for (const g of chrono) {
+        if (g.profitCents > 0) {
+            curWin++;
+            curLose = 0;
+            longestWinStreak = Math.max(longestWinStreak, curWin);
+        } else if (g.profitCents < 0) {
+            curLose++;
+            curWin = 0;
+            longestLoseStreak = Math.max(longestLoseStreak, curLose);
+        } else {
+            curWin = 0;
+            curLose = 0;
+        }
+    }
 
     return {
         player: { id: player.id, name: player.name },
@@ -245,6 +291,9 @@ export async function loadPlayerProfile(
         podiumPoints,
         winRate,
         nightsInProfit,
+        currentStreak,
+        longestWinStreak,
+        longestLoseStreak,
         recentGames: allGames
     };
 }
