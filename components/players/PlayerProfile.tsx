@@ -203,8 +203,8 @@ export function PlayerProfile({ data }: { data: PlayerProfileData }) {
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="h-[220px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
+                            <div className="min-h-[220px] min-w-0 w-full" style={{ height: 220 }}>
+                                <ResponsiveContainer width="100%" height={220} minWidth={0}>
                                     <LineChart
                                         data={chartData}
                                         margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
@@ -237,10 +237,11 @@ export function PlayerProfile({ data }: { data: PlayerProfileData }) {
                                         <Line
                                             type="monotone"
                                             dataKey="cumulative"
-                                            stroke="hsl(var(--primary))"
+                                            stroke="var(--primary)"
                                             strokeWidth={2}
                                             dot={{ r: 3 }}
                                             connectNulls
+                                            isAnimationActive={true}
                                         />
                                     </LineChart>
                                 </ResponsiveContainer>
