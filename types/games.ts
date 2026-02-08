@@ -1,9 +1,16 @@
 import { Player } from './players';
 
-import { loadGamesForGroup } from '@/actions/games';
+import {
+    loadGamesForGroup,
+    loadGamesListPageData
+} from '@/actions/games';
 
 export type LoadGamesForGroupResult = Awaited<
     ReturnType<typeof loadGamesForGroup>
+>;
+
+export type GamesListPageData = Awaited<
+    ReturnType<typeof loadGamesListPageData>
 >;
 
 export type GameStatus = 'OPEN' | 'CLOSED';
@@ -39,4 +46,8 @@ export interface GameTotals {
 
 export interface GamesListProps {
     games: LoadGamesForGroupResult;
+}
+
+export interface GamesListPageProps {
+    data: GamesListPageData;
 }

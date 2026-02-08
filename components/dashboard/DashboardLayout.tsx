@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -11,10 +11,16 @@ import {
     Users,
     Settings,
     TrendingUp,
-    Menu
+    Menu,
+    FileSpreadsheet
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import {
+    Sheet,
+    SheetContent,
+    SheetTitle,
+    SheetTrigger
+} from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
 const navigation = [
@@ -37,15 +43,22 @@ const navigation = [
         name: 'Stats',
         href: '/stats',
         icon: TrendingUp
-    },
-    {
-        name: 'Settings',
-        href: '/settings',
-        icon: Settings
     }
+    // {
+    //     name: 'Import',
+    //     href: '/import',
+    //     icon: FileSpreadsheet
+    // },
+    // {
+    //     name: 'Settings',
+    //     href: '/settings',
+    //     icon: Settings
+    // }
 ];
 
-function SidebarContent() {
+function SidebarContent({
+    onNavigate
+}: { onNavigate?: () => void } = {}) {
     const pathname = usePathname();
 
     return (
@@ -55,6 +68,7 @@ function SidebarContent() {
                 <Link
                     href="/"
                     className="flex items-center justify-center"
+                    onClick={onNavigate}
                 >
                     <Image
                         src="/images/logo.png"
@@ -77,6 +91,7 @@ function SidebarContent() {
                         <Link
                             key={item.name}
                             href={item.href}
+                            onClick={onNavigate}
                             className={cn(
                                 'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors',
                                 isActive
@@ -102,6 +117,8 @@ function SidebarContent() {
 }
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
+    const [sheetOpen, setSheetOpen] = useState(false);
+
     return (
         <div className="flex min-h-screen">
             {/* Desktop Sidebar */}
@@ -113,14 +130,19 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <div className="flex flex-1 flex-col">
                 {/* Mobile Header */}
                 <header className="sticky top-0 z-30 flex items-center gap-4 border-b bg-background px-4 py-3 lg:hidden">
-                    <Sheet>
+                    <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
                         <SheetTrigger asChild>
                             <Button variant="ghost" size="icon">
                                 <Menu className="h-5 w-5" />
                             </Button>
                         </SheetTrigger>
                         <SheetContent side="left" className="w-64 p-0">
-                            <SidebarContent />
+                            <SheetTitle className="sr-only">
+                                Navigation menu
+                            </SheetTitle>
+                            <SidebarContent
+                                onNavigate={() => setSheetOpen(false)}
+                            />
                         </SheetContent>
                     </Sheet>
                     <h1 className="text-lg font-bold">PkrTrackr</h1>

@@ -17,13 +17,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { loadGamesForGroup } from '@/actions/games';
+import { getDefaultGroupId } from '@/lib/default-group';
 import { formatCurrency } from '@/lib/money';
 import { format } from 'date-fns';
 
-const DEFAULT_GROUP_ID = 'cml531khu0000kgf58q0meaku';
-
 export default async function DashboardPage() {
-    const games = await loadGamesForGroup({ groupId: DEFAULT_GROUP_ID });
+    const groupId = await getDefaultGroupId();
+    const games = await loadGamesForGroup({ groupId });
     const openGames = games.filter((g) => g.status === 'OPEN');
     const closedGames = games.filter((g) => g.status === 'CLOSED');
 

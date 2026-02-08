@@ -17,6 +17,25 @@ export type GameListRow = {
     deltaCents: number; // buyins - cashouts
 };
 
+export type GameResultRow = {
+    playerName: string;
+    buyInCents: number;
+    cashOutCents: number | null;
+    profitCents: number;
+    /** Night score: ROI × √(buy-in $), same as stats. */
+    nightScore: number;
+};
+
+export type GameListRowWithResults = GameListRow & {
+    seasonId: string | null;
+    results: GameResultRow[];
+};
+
+export type GamesListPageData = {
+    games: GameListRowWithResults[];
+    seasons: { id: string; name: string }[];
+};
+
 export async function loadGamesForGroup(opts: {
     groupId: string;
     seasonId?: string;
@@ -108,6 +127,98 @@ export async function loadGamesForGroup(opts: {
             deltaCents
         };
     });
+}
+
+const GAMES_LIST_TAKE = 500;
+
+export async function loadGamesListPageData(opts: {
+    groupId: string;
+}): Promise<GamesListPageData> {
+    const { groupId } = opts;
+    if (!groupId) throw new Error('groupId is required');
+
+    const [seasons, games] = await Promise.all([
+        prisma.season.findMany({
+            where: { groupId },
+            orderBy: { startsAt: 'desc' },
+            select: { id: true, name: true }
+        }),
+        prisma.game.findMany({
+            where: { groupId },
+            orderBy: [{ scheduledAt: 'desc' }, { createdAt: 'desc' }],
+            take: GAMES_LIST_TAKE,
+            select: {
+                id: true,
+                name: true,
+                status: true,
+                scheduledAt: true,
+                startedAt: true,
+                closedAt: true,
+                createdAt: true,
+                seasonId: true,
+                season: { select: { id: true, name: true } },
+                players: {
+                    select: {
+                        buyInCents: true,
+                        cashOutCents: true,
+                        adjustmentCents: true,
+                        player: { select: { name: true } }
+                    }
+                }
+            }
+        })
+    ]);
+
+    function nightScore(profitCents: number, buyInCents: number): number {
+        if (buyInCents <= 0) return 0;
+        const buyInDollars = buyInCents / 100;
+        const profitDollars = profitCents / 100;
+        const roi = profitDollars / buyInDollars;
+        return roi * Math.sqrt(buyInDollars);
+    }
+
+    const gamesWithResults: GameListRowWithResults[] = games.map((g) => {
+        let totalBuyInCents = 0;
+        let totalCashOutCents = 0;
+        const results: GameResultRow[] = g.players.map((gp) => {
+            const buyInCents = gp.buyInCents;
+            const cashOutCents = gp.cashOutCents;
+            const profitCents =
+                (cashOutCents ?? 0) - buyInCents - gp.adjustmentCents;
+            totalBuyInCents += buyInCents;
+            totalCashOutCents += cashOutCents ?? 0;
+            const score = nightScore(profitCents, buyInCents);
+            return {
+                playerName: gp.player.name,
+                buyInCents,
+                cashOutCents,
+                profitCents,
+                nightScore: score
+            };
+        });
+        results.sort((a, b) => b.nightScore - a.nightScore);
+        const deltaCents = totalBuyInCents - totalCashOutCents;
+        return {
+            id: g.id,
+            name: g.name,
+            status: g.status,
+            scheduledAt: g.scheduledAt,
+            startedAt: g.startedAt,
+            closedAt: g.closedAt,
+            createdAt: g.createdAt,
+            playerCount: g.players.length,
+            totalBuyInCents,
+            totalCashOutCents,
+            deltaCents,
+            seasonId: g.seasonId,
+            results
+        };
+    });
+
+    return {
+        games: gamesWithResults,
+        seasons: seasons.map((s) => ({ id: s.id, name: s.name }))
+    };
 }
 
 // Load a single game with players and synthesized transactions, converting cents -> dollars
@@ -237,6 +348,8 @@ export async function loadGame(gameId: string): Promise<{
 }
 
 import {
+    createGameSchema,
+    type CreateGameInput,
     addPlayerSchema,
     type AddPlayerInput,
     buyInSchema,
@@ -250,6 +363,36 @@ import {
     closeGameSchema,
     type CloseGameInput
 } from '@/schemas/games';
+import { getDefaultGroupId } from '@/lib/default-group';
+
+export async function createGameAction(
+    input: CreateGameInput
+): Promise<{ success: boolean; error?: string; gameId?: string }> {
+    try {
+        const data = createGameSchema.parse(input);
+        const groupId = await getDefaultGroupId();
+        const { nanoid } = await import('nanoid');
+        const game = await prisma.game.create({
+            data: {
+                groupId,
+                name: data.name.trim(),
+                status: 'OPEN',
+                scheduledAt: data.date,
+                shareId: nanoid(16)
+            }
+        });
+        return { success: true, gameId: game.id };
+    } catch (err: unknown) {
+        if (err && typeof err === 'object' && 'name' in err && (err as { name: string }).name === 'ZodError') {
+            const zod = err as { errors: { message: string }[] };
+            return { success: false, error: zod.errors[0]?.message ?? 'Validation failed' };
+        }
+        return {
+            success: false,
+            error: err instanceof Error ? err.message : String(err)
+        };
+    }
+}
 
 export async function addPlayerAction(input: AddPlayerInput): Promise<{
     success: boolean;

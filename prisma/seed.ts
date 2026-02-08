@@ -56,10 +56,28 @@ async function main() {
         }
     });
 
+    await prisma.season.create({
+        data: {
+            groupId: group.id,
+            name: '2025',
+            startsAt: fromZonedTime('2025-01-01T00:00:00', MEL_TZ),
+            endsAt: fromZonedTime('2025-12-31T23:59:59', MEL_TZ)
+        }
+    });
+
+    await prisma.season.create({
+        data: {
+            groupId: group.id,
+            name: '2024',
+            startsAt: fromZonedTime('2024-01-01T00:00:00', MEL_TZ),
+            endsAt: fromZonedTime('2024-12-31T23:59:59', MEL_TZ)
+        }
+    });
+
     const season = await prisma.season.create({
         data: {
             groupId: group.id,
-            name: '2026 Season',
+            name: '2026',
             startsAt: new Date('2026-01-01')
         }
     });
@@ -80,7 +98,7 @@ async function main() {
     // Create guest players
     // ----------------------------
 
-    const guestNames = ['Cam', 'Dave L', 'Jack', 'Frank'];
+    const guestNames = ['Cam', 'Dave L', 'Jack', 'Frank', 'Julia', 'James T'];
 
     const guestPlayers = [];
     for (const name of guestNames) {
