@@ -3,6 +3,7 @@
 import { nanoid } from 'nanoid';
 import { prisma } from '@/lib/prisma';
 import { getDefaultGroupId } from '@/lib/default-group';
+import { recomputeSeasonPlayerStats } from '@/lib/season-stats';
 
 type CsvRow = {
     season_name: string;
@@ -219,55 +220,9 @@ export async function importGamesFromCsvAction(csvText: string): Promise<{
             { timeout: 60_000 }
         );
 
-        // Recompute season stats from actual game_players
         const seasonIds = Array.from(seasonIdsByName.values());
         for (const sid of seasonIds) {
-            const gps = await prisma.gamePlayer.findMany({
-                where: { game: { seasonId: sid } },
-                select: {
-                    playerId: true,
-                    buyInCents: true,
-                    cashOutCents: true,
-                    adjustmentCents: true
-                }
-            });
-            const byPlayer = new Map<
-                string,
-                { buyIn: number; cashOut: number; adjustment: number; games: number }
-            >();
-            for (const gp of gps) {
-                const cur = byPlayer.get(gp.playerId) ?? {
-                    buyIn: 0,
-                    cashOut: 0,
-                    adjustment: 0,
-                    games: 0
-                };
-                cur.buyIn += gp.buyInCents;
-                cur.cashOut += gp.cashOutCents ?? 0;
-                cur.adjustment += gp.adjustmentCents;
-                cur.games += 1;
-                byPlayer.set(gp.playerId, cur);
-            }
-            for (const [playerId, tot] of byPlayer) {
-                const profit = tot.cashOut - tot.buyIn - tot.adjustment;
-                await prisma.seasonPlayerStats.upsert({
-                    where: { seasonId_playerId: { seasonId: sid, playerId } },
-                    update: {
-                        totalBuyInCents: tot.buyIn,
-                        totalCashOutCents: tot.cashOut,
-                        totalProfitCents: profit,
-                        totalGames: tot.games
-                    },
-                    create: {
-                        seasonId: sid,
-                        playerId,
-                        totalBuyInCents: tot.buyIn,
-                        totalCashOutCents: tot.cashOut,
-                        totalProfitCents: profit,
-                        totalGames: tot.games
-                    }
-                });
-            }
+            await recomputeSeasonPlayerStats(sid);
         }
 
         return {

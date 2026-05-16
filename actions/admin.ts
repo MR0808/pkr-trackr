@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { getDefaultGroupId } from '@/lib/default-group';
+import { recomputeSeasonPlayerStats } from '@/lib/season-stats';
 import {
     getAdminSession,
     setAdminCookie,
@@ -310,13 +311,14 @@ export async function adminGetGameForEdit(
 
 export async function adminUpdateGamePlayerAmounts(
     gameId: string,
-    updates: { gamePlayerId: string; buyInCents: number; cashOutCents: number | null; adjustmentCents: number }[]
+    updates: { gamePlayerId: string; buyInCents: number; cashOutCents: number | null; adjustmentCents: number }[],
+    options?: { reprocess?: boolean }
 ): Promise<{ success: boolean; error?: string }> {
     await requireAdmin();
     const groupId = await getDefaultGroupId();
     const game = await prisma.game.findFirst({
         where: { id: gameId, groupId },
-        select: { id: true }
+        select: { id: true, seasonId: true }
     });
     if (!game) return { success: false, error: 'Game not found' };
     try {
@@ -330,12 +332,51 @@ export async function adminUpdateGamePlayerAmounts(
                 }
             });
         }
+        if (options?.reprocess !== false && game.seasonId) {
+            await recomputeSeasonPlayerStats(game.seasonId);
+        }
         revalidatePath('/admin');
         revalidatePath('/admin/games');
         revalidatePath(`/admin/games/${gameId}`);
+        revalidatePath(`/admin/games/${gameId}/edit`);
         revalidatePath(`/games/${gameId}`);
+        revalidatePath(`/games/${gameId}/results`);
+        revalidatePath('/stats');
         return { success: true };
     } catch (e) {
         return { success: false, error: e instanceof Error ? e.message : 'Failed to update amounts' };
+    }
+}
+
+export async function adminRemovePlayerFromGameAction(
+    gameId: string,
+    gamePlayerId: string
+): Promise<{ success: boolean; error?: string }> {
+    await requireAdmin();
+    const groupId = await getDefaultGroupId();
+    const game = await prisma.game.findFirst({
+        where: { id: gameId, groupId },
+        select: { id: true, seasonId: true }
+    });
+    if (!game) return { success: false, error: 'Game not found' };
+
+    const gp = await prisma.gamePlayer.findFirst({
+        where: { id: gamePlayerId, gameId },
+        select: { id: true }
+    });
+    if (!gp) return { success: false, error: 'Player not in this night' };
+
+    try {
+        await prisma.gamePlayer.delete({ where: { id: gamePlayerId } });
+        if (game.seasonId) {
+            await recomputeSeasonPlayerStats(game.seasonId);
+        }
+        revalidatePath('/admin/games');
+        revalidatePath(`/admin/games/${gameId}/edit`);
+        revalidatePath(`/games/${gameId}`);
+        revalidatePath(`/games/${gameId}/results`);
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : 'Failed to remove player' };
     }
 }

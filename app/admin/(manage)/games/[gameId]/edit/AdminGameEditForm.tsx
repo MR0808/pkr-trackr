@@ -7,7 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { AdminGamePlayerRow } from '@/actions/admin';
-import { adminUpdateGamePlayerAmounts } from '@/actions/admin';
+import {
+    adminRemovePlayerFromGameAction,
+    adminUpdateGamePlayerAmounts
+} from '@/actions/admin';
+import { reprocessGameAction } from '@/actions/games';
 
 type GameInfo = { id: string; name: string; status: string };
 
@@ -41,6 +45,7 @@ export function AdminGameEditForm({
     );
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [reprocessLoading, setReprocessLoading] = useState(false);
 
     function setBuyIn(index: number, value: string) {
         setPlayers((prev) => {
@@ -62,6 +67,36 @@ export function AdminGameEditForm({
             next[index] = { ...next[index], adjustmentDollars: value };
             return next;
         });
+    }
+
+    async function handleRemove(gamePlayerId: string, playerName: string) {
+        if (
+            !confirm(
+                `Remove ${playerName} from this night? Their amounts for this night will be deleted.`
+            )
+        ) {
+            return;
+        }
+        setError(null);
+        const res = await adminRemovePlayerFromGameAction(gameId, gamePlayerId);
+        if (res.success) {
+            setPlayers((prev) => prev.filter((p) => p.gamePlayerId !== gamePlayerId));
+            router.refresh();
+        } else {
+            setError(res.error ?? 'Failed to remove player');
+        }
+    }
+
+    async function handleReprocess() {
+        setReprocessLoading(true);
+        setError(null);
+        const res = await reprocessGameAction({ gameId });
+        setReprocessLoading(false);
+        if (res.success) {
+            router.refresh();
+        } else {
+            setError(res.error ?? 'Failed to reprocess');
+        }
     }
 
     async function handleSubmit(e: React.FormEvent) {
@@ -102,6 +137,7 @@ export function AdminGameEditForm({
                                     <th className="pb-2 pr-4 text-right font-medium">Buy-in ($)</th>
                                     <th className="pb-2 pr-4 text-right font-medium">Cash-out ($)</th>
                                     <th className="pb-2 text-right font-medium">Adjustment ($)</th>
+                                    <th className="pb-2 w-24" />
                                 </tr>
                             </thead>
                             <tbody>
@@ -139,6 +175,19 @@ export function AdminGameEditForm({
                                                 onChange={(e) => setAdjustment(i, e.target.value)}
                                             />
                                         </td>
+                                        <td className="py-2 text-right">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="text-destructive hover:text-destructive"
+                                                onClick={() =>
+                                                    handleRemove(p.gamePlayerId, p.playerName)
+                                                }
+                                            >
+                                                Remove
+                                            </Button>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -150,7 +199,15 @@ export function AdminGameEditForm({
                     {error && <p className="text-sm text-destructive">{error}</p>}
                     <div className="flex gap-2">
                         <Button type="submit" disabled={loading || players.length === 0}>
-                            {loading ? 'Saving…' : 'Save changes'}
+                            {loading ? 'Saving…' : 'Save & reprocess'}
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            disabled={reprocessLoading}
+                            onClick={handleReprocess}
+                        >
+                            {reprocessLoading ? 'Reprocessing…' : 'Reprocess season stats'}
                         </Button>
                         <Button type="button" variant="outline" onClick={() => router.push('/admin/games')}>
                             Cancel

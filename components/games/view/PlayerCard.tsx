@@ -10,10 +10,10 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2 } from 'lucide-react';
+import { Loader2, UserMinus } from 'lucide-react';
 import type { Player } from '@/types/players';
 import { formatCurrency, formatCurrencyWithSign } from '@/lib/money';
-import { addBuyInAction } from '@/actions/games';
+import { addBuyInAction, removePlayerFromGameAction } from '@/actions/games';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -37,6 +37,7 @@ interface PlayerCardProps {
     onFinalizeOptimistic?: (playerId: string) => void;
     // When true this is an optimistic temporary player (show 'Adding…')
     isTemporary?: boolean;
+    onRemoved?: () => void;
 }
 
 const PRESET_AMOUNTS = [20, 50, 100];
@@ -52,9 +53,11 @@ export function PlayerCard({
     onApplyOptimisticBuyIn,
     onRevertOptimistic,
     onFinalizeOptimistic,
-    isTemporary
+    isTemporary,
+    onRemoved
 }: PlayerCardProps) {
     const [isPending, startTransition] = useTransition();
+    const [removePending, startRemoveTransition] = useTransition();
 
     // Derive displayed values from either optimistic overrides (provided by parent)
     // or authoritative server props. net = result = cashout - buyin (positive = won)
@@ -66,6 +69,28 @@ export function PlayerCard({
     const effectiveNet =
         optimisticOverride?.net ??
         (effectiveCashout ?? 0) - effectiveBuyInsTotal - effectiveAdjustmentsTotal;
+
+    const handleRemove = () => {
+        if (
+            !confirm(
+                `Remove ${player.name} from this night? Their buy-ins and cash-out for this night will be deleted.`
+            )
+        ) {
+            return;
+        }
+        startRemoveTransition(async () => {
+            const result = await removePlayerFromGameAction({
+                gameId,
+                playerId: player.id
+            });
+            if (result.success) {
+                toast.success(`${player.name} removed from night`);
+                onRemoved?.();
+            } else {
+                toast.error(result.error ?? 'Failed to remove player');
+            }
+        });
+    };
 
     const handlePresetBuyIn = (amount: number) => {
         // Ask parent to apply an optimistic update (fast UI) before the server round-trip
@@ -228,6 +253,18 @@ export function PlayerCard({
                 >
                     Adjustment
                 </Button>
+                {!isGameClosed && !isTemporary && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={isPending || removePending}
+                        onClick={handleRemove}
+                        className="h-9 w-full rounded-lg text-sm text-destructive hover:text-destructive"
+                    >
+                        <UserMinus className="mr-1.5 h-3.5 w-3.5 inline" />
+                        Remove from night
+                    </Button>
+                )}
             </CardFooter>
         </Card>
     );

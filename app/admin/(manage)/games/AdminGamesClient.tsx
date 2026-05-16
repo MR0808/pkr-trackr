@@ -20,7 +20,11 @@ import {
     adminCreateGameAction,
     adminUpdateGameAction
 } from '@/actions/admin';
-import { closeGameAction } from '@/actions/games';
+import {
+    closeGameAction,
+    reopenGameAction,
+    reprocessGameAction
+} from '@/actions/games';
 import { useRouter } from 'next/navigation';
 import { Plus, Pencil, ExternalLink, DollarSign } from 'lucide-react';
 
@@ -101,6 +105,17 @@ export function AdminGamesClient({
     async function handleClose(gameId: string) {
         const res = await closeGameAction({ gameId });
         if (res.success) router.refresh();
+    }
+
+    async function handleReopen(gameId: string) {
+        const res = await reopenGameAction({ gameId });
+        if (res.success) router.push(`/games/${gameId}`);
+    }
+
+    async function handleReprocess(gameId: string) {
+        const res = await reprocessGameAction({ gameId });
+        if (res.success) router.refresh();
+        else setError(res.error ?? 'Reprocess failed');
     }
 
     return (
@@ -202,6 +217,86 @@ export function AdminGamesClient({
                                             Edit buy-ins
                                         </Link>
                                     </Button>
+                                    {g.status === 'CLOSED' && (
+                                        <>
+                                            {editId === g.id ? (
+                                                <form onSubmit={handleUpdate} className="flex flex-wrap items-center gap-2">
+                                                    <Input
+                                                        value={editName}
+                                                        onChange={(e) => setEditName(e.target.value)}
+                                                        className="h-8 w-36"
+                                                        placeholder="Name"
+                                                    />
+                                                    <Input
+                                                        type="datetime-local"
+                                                        value={editDate}
+                                                        onChange={(e) => setEditDate(e.target.value)}
+                                                        className="h-8 w-44"
+                                                    />
+                                                    <select
+                                                        className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                                                        value={editSeasonId}
+                                                        onChange={(e) => setEditSeasonId(e.target.value)}
+                                                    >
+                                                        <option value="">No season</option>
+                                                        {seasonOptions.map((s) => (
+                                                            <option key={s.id} value={s.id}>
+                                                                {s.name}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    <Button type="submit" size="sm" disabled={loading}>
+                                                        Save
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => {
+                                                            setEditId(null);
+                                                            setError(null);
+                                                        }}
+                                                    >
+                                                        Cancel
+                                                    </Button>
+                                                </form>
+                                            ) : (
+                                                <>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="gap-1"
+                                                        onClick={() => {
+                                                            setEditId(g.id);
+                                                            setEditName(g.name);
+                                                            setEditDate(format(new Date(g.scheduledAt), "yyyy-MM-dd'T'HH:mm"));
+                                                            setEditSeasonId(g.seasonId ?? '');
+                                                            setError(null);
+                                                        }}
+                                                    >
+                                                        <Pencil className="h-3 w-3" />
+                                                        Edit
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleReopen(g.id)}
+                                                    >
+                                                        Reopen
+                                                    </Button>
+                                                    {g.seasonId && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => handleReprocess(g.id)}
+                                                        >
+                                                            Reprocess
+                                                        </Button>
+                                                    )}
+                                                </>
+                                            )}
+                                        </>
+                                    )}
                                     {g.status === 'OPEN' && (
                                         <>
                                             {editId === g.id ? (

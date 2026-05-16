@@ -23,6 +23,7 @@ export interface Game {
     status: GameStatus;
     createdAt: Date;
     closedAt: Date | null;
+    seasonId: string | null;
     players: Player[];
     transactions: Transaction[];
     scheduledAt: Date;

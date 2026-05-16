@@ -1175,6 +1175,7 @@ export async function loadGame(gameId: string): Promise<{
         createdAt: game.createdAt,
         closedAt: game.closedAt,
         scheduledAt: game.scheduledAt,
+        seasonId: game.seasonId,
         players,
         transactions
     };
@@ -1196,9 +1197,48 @@ import {
     undoTransactionSchema,
     type UndoTransactionInput,
     closeGameSchema,
-    type CloseGameInput
+    type CloseGameInput,
+    updateGameSchema,
+    type UpdateGameInput,
+    removePlayerFromGameSchema,
+    type RemovePlayerFromGameInput,
+    gameIdSchema,
+    type GameIdInput
 } from '@/schemas/games';
 import { getDefaultGroupId } from '@/lib/default-group';
+import { revalidatePath } from 'next/cache';
+import { recomputeSeasonPlayerStats } from '@/lib/season-stats';
+
+function revalidateGamePaths(gameId: string) {
+    revalidatePath('/');
+    revalidatePath('/games');
+    revalidatePath(`/games/${gameId}`);
+    revalidatePath(`/games/${gameId}/results`);
+    revalidatePath('/stats/nights');
+    revalidatePath('/admin/games');
+    revalidatePath(`/admin/games/${gameId}/edit`);
+}
+
+export async function loadGameSeasonOptions(): Promise<
+    { id: string; name: string }[]
+> {
+    const groupId = await getDefaultGroupId();
+    const seasons = await prisma.season.findMany({
+        where: { groupId },
+        orderBy: { startsAt: 'desc' },
+        select: { id: true, name: true }
+    });
+    return seasons;
+}
+
+async function reprocessSeasonsForGame(
+    seasonIds: (string | null | undefined)[]
+): Promise<void> {
+    const unique = [...new Set(seasonIds.filter((id): id is string => !!id))];
+    for (const seasonId of unique) {
+        await recomputeSeasonPlayerStats(seasonId);
+    }
+}
 
 export async function createGameAction(
     input: CreateGameInput
@@ -1866,12 +1906,158 @@ export async function closeGameAction(
             shareId = nanoid(6);
         }
 
-        await prisma.game.update({
+        const closed = await prisma.game.update({
             where: { id: gameId },
-            data: { status: 'CLOSED', closedAt: new Date(), shareId }
+            data: { status: 'CLOSED', closedAt: new Date(), shareId },
+            select: { seasonId: true }
         });
 
+        if (closed.seasonId) {
+            await recomputeSeasonPlayerStats(closed.seasonId);
+        }
+
+        revalidateGamePaths(gameId);
+
         return { success: true, shareId };
+    } catch (err: any) {
+        if (err?.name === 'ZodError' && err?.errors?.length)
+            return { success: false, error: err.errors[0].message };
+        return { success: false, error: err?.message || String(err) };
+    }
+}
+
+export async function updateGameAction(
+    input: UpdateGameInput
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const data = updateGameSchema.parse(input);
+        const groupId = await getDefaultGroupId();
+
+        const existing = await prisma.game.findFirst({
+            where: { id: data.gameId, groupId },
+            select: { id: true, status: true, seasonId: true }
+        });
+        if (!existing) return { success: false, error: 'Game not found' };
+
+        const patch: {
+            name?: string;
+            scheduledAt?: Date;
+            seasonId?: string | null;
+        } = {};
+        if (data.name !== undefined) patch.name = data.name.trim();
+        if (data.scheduledAt !== undefined) patch.scheduledAt = data.scheduledAt;
+        if (data.seasonId !== undefined) {
+            patch.seasonId = data.seasonId;
+        }
+
+        if (Object.keys(patch).length === 0) {
+            return { success: true };
+        }
+
+        await prisma.game.update({
+            where: { id: data.gameId },
+            data: patch
+        });
+
+        await reprocessSeasonsForGame([existing.seasonId, patch.seasonId]);
+
+        revalidateGamePaths(data.gameId);
+        return { success: true };
+    } catch (err: any) {
+        if (err?.name === 'ZodError' && err?.errors?.length)
+            return { success: false, error: err.errors[0].message };
+        return { success: false, error: err?.message || String(err) };
+    }
+}
+
+export async function removePlayerFromGameAction(
+    input: RemovePlayerFromGameInput
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const data = removePlayerFromGameSchema.parse(input);
+        const groupId = await getDefaultGroupId();
+
+        const game = await prisma.game.findFirst({
+            where: { id: data.gameId, groupId },
+            select: { id: true, status: true, seasonId: true }
+        });
+        if (!game) return { success: false, error: 'Game not found' };
+        if (game.status === 'CLOSED') {
+            return { success: false, error: 'Reopen the night before removing players' };
+        }
+
+        const deleted = await prisma.gamePlayer.deleteMany({
+            where: { gameId: data.gameId, playerId: data.playerId }
+        });
+        if (deleted.count === 0) {
+            return { success: false, error: 'Player not in this night' };
+        }
+
+        if (game.seasonId) {
+            await recomputeSeasonPlayerStats(game.seasonId);
+        }
+
+        revalidateGamePaths(data.gameId);
+        return { success: true };
+    } catch (err: any) {
+        if (err?.name === 'ZodError' && err?.errors?.length)
+            return { success: false, error: err.errors[0].message };
+        return { success: false, error: err?.message || String(err) };
+    }
+}
+
+export async function reopenGameAction(
+    input: GameIdInput
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const { gameId } = gameIdSchema.parse(input);
+        const groupId = await getDefaultGroupId();
+
+        const game = await prisma.game.findFirst({
+            where: { id: gameId, groupId },
+            select: { id: true, status: true }
+        });
+        if (!game) return { success: false, error: 'Game not found' };
+        if (game.status === 'OPEN') {
+            return { success: false, error: 'Night is already open' };
+        }
+
+        await prisma.game.update({
+            where: { id: gameId },
+            data: { status: 'OPEN', closedAt: null }
+        });
+
+        revalidateGamePaths(gameId);
+        return { success: true };
+    } catch (err: any) {
+        if (err?.name === 'ZodError' && err?.errors?.length)
+            return { success: false, error: err.errors[0].message };
+        return { success: false, error: err?.message || String(err) };
+    }
+}
+
+/** Rebuild season leaderboard cache for this night's season(s). */
+export async function reprocessGameAction(
+    input: GameIdInput
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const { gameId } = gameIdSchema.parse(input);
+        const groupId = await getDefaultGroupId();
+
+        const game = await prisma.game.findFirst({
+            where: { id: gameId, groupId },
+            select: { id: true, seasonId: true }
+        });
+        if (!game) return { success: false, error: 'Game not found' };
+        if (!game.seasonId) {
+            return { success: false, error: 'This night has no season assigned' };
+        }
+
+        await recomputeSeasonPlayerStats(game.seasonId);
+
+        revalidateGamePaths(gameId);
+        revalidatePath('/stats');
+        return { success: true };
     } catch (err: any) {
         if (err?.name === 'ZodError' && err?.errors?.length)
             return { success: false, error: err.errors[0].message };

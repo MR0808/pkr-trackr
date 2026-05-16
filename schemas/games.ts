@@ -53,6 +53,22 @@ export const closeGameSchema = z.object({
     gameId: z.string().min(1)
 });
 
+export const updateGameSchema = z.object({
+    gameId: z.string().min(1),
+    name: z.string().min(1).max(100).optional(),
+    scheduledAt: z.coerce.date().optional(),
+    seasonId: z.string().nullable().optional()
+});
+
+export const removePlayerFromGameSchema = z.object({
+    gameId: z.string().min(1),
+    playerId: z.string().min(1)
+});
+
+export const gameIdSchema = z.object({
+    gameId: z.string().min(1)
+});
+
 // Add multiple players: existing ids and/or new player names
 export const addPlayersSchema = z.object({
     gameId: z.string().min(1),
@@ -70,3 +86,6 @@ export type CashoutInput = z.infer<typeof cashoutSchema>;
 export type AdjustmentInput = z.infer<typeof adjustmentSchema>;
 export type UndoTransactionInput = z.infer<typeof undoTransactionSchema>;
 export type CloseGameInput = z.infer<typeof closeGameSchema>;
+export type UpdateGameInput = z.infer<typeof updateGameSchema>;
+export type RemovePlayerFromGameInput = z.infer<typeof removePlayerFromGameSchema>;
+export type GameIdInput = z.infer<typeof gameIdSchema>;

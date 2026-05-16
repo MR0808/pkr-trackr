@@ -4,7 +4,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { TotalsBar } from '@/components/games/view/TotalsBar';
 import { ResultsSection } from '@/components/games/view/ResultsSection';
-import { loadGame } from '@/actions/games';
+import { loadGame, loadGameSeasonOptions } from '@/actions/games';
+import { ManageClosedNight } from '@/components/games/view/ManageClosedNight';
 import { format } from 'date-fns';
 import { formatCurrencyWithSign } from '@/lib/money';
 
@@ -16,7 +17,10 @@ interface ResultsPageProps {
 
 export default async function ResultsPage({ params }: ResultsPageProps) {
     const { gameid } = await params;
-    const { game, totals, shareId } = await loadGame(gameid);
+    const [{ game, totals, shareId }, seasonOptions] = await Promise.all([
+        loadGame(gameid),
+        loadGameSeasonOptions()
+    ]);
 
     if (!game || !totals) {
         notFound();
@@ -48,6 +52,13 @@ export default async function ResultsPage({ params }: ResultsPageProps) {
                             </Badge>
                             <Badge variant="default">CLOSED</Badge>
                         </div>
+                        <ManageClosedNight
+                            gameId={game.id}
+                            name={game.name}
+                            scheduledAt={game.scheduledAt}
+                            seasonId={game.seasonId}
+                            seasonOptions={seasonOptions}
+                        />
                     </div>
                 </div>
             </div>

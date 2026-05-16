@@ -9,12 +9,16 @@ import { AddPlayerDialog } from '@/components/games/view/AddPlayerDialog';
 import { useGameStore } from '@/components/games/stores/useGameStore';
 import { AmountDialog } from '@/components/games/view/AmountDialog';
 import { ActivityFeed } from '@/components/games/view/ActivityFeed';
+import { EditGameDialog } from '@/components/games/view/EditGameDialog';
+
+type SeasonOption = { id: string; name: string };
 
 interface CashierClientProps {
     game: Game;
+    seasonOptions: SeasonOption[];
 }
 
-export function CashierClient({ game }: CashierClientProps) {
+export function CashierClient({ game, seasonOptions }: CashierClientProps) {
     const router = useRouter();
 
     // Centralized optimistic state and caching via Zustand
@@ -151,6 +155,14 @@ export function CashierClient({ game }: CashierClientProps) {
                             </button>
                         </div>
 
+                        <EditGameDialog
+                            gameId={game.id}
+                            name={game.name}
+                            scheduledAt={game.scheduledAt}
+                            seasonId={game.seasonId}
+                            seasonOptions={seasonOptions}
+                        />
+
                         {process.env.NODE_ENV !== 'production' && (
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <label className="text-xs">
@@ -224,6 +236,7 @@ export function CashierClient({ game }: CashierClientProps) {
                                 isTemporary={String(player.id).startsWith(
                                     'temp-'
                                 )}
+                                onRemoved={() => router.refresh()}
                             />
                         ))}
 

@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { TotalsBar } from '@/components/games/view/TotalsBar';
 import { CloseGameDialog } from '@/components/games/view/CloseGameDialog';
 import { CashierClient } from '@/components/games/view/CashierClient';
-import { loadGame } from '@/actions/games';
+import { loadGame, loadGameSeasonOptions } from '@/actions/games';
+import { EditGameDialog } from '@/components/games/view/EditGameDialog';
 
 interface CashierPageProps {
     params: Promise<{
@@ -16,7 +17,10 @@ interface CashierPageProps {
 
 export default async function CashierPage({ params }: CashierPageProps) {
     const { gameid } = await params;
-    const { game, totals } = await loadGame(gameid);
+    const [{ game, totals }, seasonOptions] = await Promise.all([
+        loadGame(gameid),
+        loadGameSeasonOptions()
+    ]);
 
     if (!game || !totals) {
         notFound();
@@ -59,11 +63,20 @@ export default async function CashierPage({ params }: CashierPageProps) {
                                     {game.status}
                                 </Badge>
                             </div>
-                            <CloseGameDialog
-                                gameId={game.id}
-                                totals={totals}
-                                isGameClosed={false}
-                            />
+                            <div className="flex flex-wrap items-center gap-2">
+                                <EditGameDialog
+                                    gameId={game.id}
+                                    name={game.name}
+                                    scheduledAt={game.scheduledAt}
+                                    seasonId={game.seasonId}
+                                    seasonOptions={seasonOptions}
+                                />
+                                <CloseGameDialog
+                                    gameId={game.id}
+                                    totals={totals}
+                                    isGameClosed={false}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -78,7 +91,7 @@ export default async function CashierPage({ params }: CashierPageProps) {
 
             {/* Main Content */}
             <div className="container mx-auto max-w-7xl px-4 py-4 lg:px-6 lg:py-6">
-                <CashierClient game={game} />
+                <CashierClient game={game} seasonOptions={seasonOptions} />
             </div>
         </main>
     );
