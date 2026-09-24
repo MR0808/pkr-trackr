@@ -1214,6 +1214,10 @@ function revalidateGamePaths(gameId: string) {
     revalidatePath('/games');
     revalidatePath(`/games/${gameId}`);
     revalidatePath(`/games/${gameId}/results`);
+    revalidatePath('/players');
+    revalidatePath('/players', 'layout');
+    revalidatePath('/stats');
+    revalidatePath('/stats/players');
     revalidatePath('/stats/nights');
     revalidatePath('/admin/games');
     revalidatePath(`/admin/games/${gameId}/edit`);
@@ -2056,7 +2060,6 @@ export async function reprocessGameAction(
         await recomputeSeasonPlayerStats(game.seasonId);
 
         revalidateGamePaths(gameId);
-        revalidatePath('/stats');
         return { success: true };
     } catch (err: any) {
         if (err?.name === 'ZodError' && err?.errors?.length)
