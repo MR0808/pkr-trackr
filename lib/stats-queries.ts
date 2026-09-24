@@ -15,7 +15,8 @@ import type {
     DistributionBucket,
     SkillRatingRow,
     InsightsNarrative,
-    HeaterIndexRow
+    HeaterIndexRow,
+    WeirdInsight
 } from '@/types/stats';
 
 const PODIUM_POINTS = [3, 2, 1] as const;
@@ -1312,4 +1313,665 @@ export async function getHeaterIndex(
             heaterNightCount: count
         }))
         .sort((a, b) => b.heaterNightCount - a.heaterNightCount);
+}
+
+const WEIRD_MIN_NIGHTS = 3;
+const WEIRD_MIN_NIGHTS_VOLATILITY = 5;
+
+type NightStanding = {
+    playerId: string;
+    name: string;
+    buyInCents: number;
+    cashOutCents: number;
+    profitCents: number;
+    rank: number;
+    potShare: number;
+};
+
+function formatUsdFromCents(cents: number): string {
+    const dollars = cents / 100;
+    const formatted = Math.abs(dollars).toLocaleString('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0
+    });
+    if (dollars > 0) return `+${formatted}`;
+    if (dollars < 0) return `-${formatted}`;
+    return formatted;
+}
+
+function stdev(values: number[]): number {
+    if (values.length < 2) return 0;
+    const mean = values.reduce((s, v) => s + v, 0) / values.length;
+    const variance =
+        values.reduce((s, v) => s + (v - mean) ** 2, 0) / (values.length - 1);
+    return Math.sqrt(variance);
+}
+
+function pickTopByCount(
+    counts: Map<string, { name: string; count: number }>,
+    minCount = 1
+): { playerId: string; name: string; count: number } | null {
+    let best: { playerId: string; name: string; count: number } | null = null;
+    for (const [playerId, rec] of counts) {
+        if (rec.count < minCount) continue;
+        if (!best || rec.count > best.count) {
+            best = { playerId, name: rec.name, count: rec.count };
+        }
+    }
+    return best;
+}
+
+/** Quirky, delightful stats that aren't on the main leaderboards. */
+export async function getWeirdWonderfulStats(
+    groupId: string,
+    filters: StatsFilters
+): Promise<WeirdInsight[]> {
+    const games = await loadFilteredGames(groupId, filters);
+    if (games.length === 0) return [];
+
+    const insights: WeirdInsight[] = [];
+
+    type PlayerAgg = {
+        name: string;
+        nights: number;
+        profits: number[];
+        ranks: number[];
+        fieldSizes: number[];
+        gameIdsInOrder: string[];
+        fourths: number;
+        thirds: number;
+        seconds: number;
+        felted: number;
+        breakEven: number;
+        shortStackWins: number;
+        potShares: number[];
+        winPotShares: number[];
+        donatedCents: number;
+        opponents: Set<string>;
+    };
+
+    const byPlayer = new Map<string, PlayerAgg>();
+    const ensure = (playerId: string, name: string): PlayerAgg => {
+        let rec = byPlayer.get(playerId);
+        if (!rec) {
+            rec = {
+                name,
+                nights: 0,
+                profits: [],
+                ranks: [],
+                fieldSizes: [],
+                gameIdsInOrder: [],
+                fourths: 0,
+                thirds: 0,
+                seconds: 0,
+                felted: 0,
+                breakEven: 0,
+                shortStackWins: 0,
+                potShares: [],
+                winPotShares: [],
+                donatedCents: 0,
+                opponents: new Set()
+            };
+            byPlayer.set(playerId, rec);
+        }
+        return rec;
+    };
+
+    let chaosNight: {
+        gameId: string;
+        name: string;
+        stdev: number;
+    } | null = null;
+    let photoFinish: {
+        gameId: string;
+        name: string;
+        gapCents: number;
+    } | null = null;
+    let biggestHeist: {
+        gameId: string;
+        gameName: string;
+        playerId: string;
+        name: string;
+        profitCents: number;
+    } | null = null;
+
+    const weekdayLosses = new Map<
+        number,
+        { lossCents: number; nights: number }
+    >();
+
+    for (const g of games) {
+        const potCents = g.players.reduce((s, gp) => s + gp.buyInCents, 0);
+        const standings: NightStanding[] = g.players
+            .map((gp) => {
+                const cash = gp.cashOutCents ?? 0;
+                const profit = cash - gp.buyInCents - gp.adjustmentCents;
+                return {
+                    playerId: gp.player.id,
+                    name: gp.player.name,
+                    buyInCents: gp.buyInCents,
+                    cashOutCents: cash,
+                    profitCents: profit,
+                    rank: 0,
+                    potShare: potCents > 0 ? gp.buyInCents / potCents : 0
+                };
+            })
+            .sort((a, b) => b.profitCents - a.profitCents);
+
+        standings.forEach((s, i) => {
+            s.rank = i + 1;
+        });
+
+        const profits = standings.map((s) => s.profitCents);
+        const nightStdev = stdev(profits);
+        if (!chaosNight || nightStdev > chaosNight.stdev) {
+            chaosNight = {
+                gameId: g.id,
+                name: g.name,
+                stdev: nightStdev
+            };
+        }
+
+        if (standings.length >= 2) {
+            const gap = standings[0]!.profitCents - standings[standings.length - 1]!.profitCents;
+            if (gap >= 0 && (!photoFinish || gap < photoFinish.gapCents)) {
+                photoFinish = {
+                    gameId: g.id,
+                    name: g.name,
+                    gapCents: gap
+                };
+            }
+        }
+
+        const winner = standings[0];
+        if (
+            winner &&
+            (!biggestHeist || winner.profitCents > biggestHeist.profitCents)
+        ) {
+            biggestHeist = {
+                gameId: g.id,
+                gameName: g.name,
+                playerId: winner.playerId,
+                name: winner.name,
+                profitCents: winner.profitCents
+            };
+        }
+
+        const weekday = new Date(g.scheduledAt).getDay();
+        const nightLoss = profits
+            .filter((p) => p < 0)
+            .reduce((s, p) => s + Math.abs(p), 0);
+        const wd = weekdayLosses.get(weekday) ?? { lossCents: 0, nights: 0 };
+        wd.lossCents += nightLoss;
+        wd.nights += 1;
+        weekdayLosses.set(weekday, wd);
+
+        const minBuyIn = Math.min(...standings.map((s) => s.buyInCents));
+
+        for (const s of standings) {
+            const rec = ensure(s.playerId, s.name);
+            rec.nights += 1;
+            rec.profits.push(s.profitCents);
+            rec.ranks.push(s.rank);
+            rec.fieldSizes.push(standings.length);
+            rec.gameIdsInOrder.push(g.id);
+            rec.potShares.push(s.potShare);
+            if (s.rank === 2) rec.seconds += 1;
+            if (s.rank === 3) rec.thirds += 1;
+            if (s.rank === 4) rec.fourths += 1;
+            if (s.cashOutCents === 0) rec.felted += 1;
+            if (s.profitCents === 0) rec.breakEven += 1;
+            if (s.rank === 1 && s.buyInCents === minBuyIn && standings.length >= 3) {
+                rec.shortStackWins += 1;
+            }
+            if (s.rank === 1) rec.winPotShares.push(s.potShare);
+            if (s.profitCents < 0) rec.donatedCents += Math.abs(s.profitCents);
+            for (const other of standings) {
+                if (other.playerId !== s.playerId) {
+                    rec.opponents.add(other.playerId);
+                }
+            }
+        }
+    }
+
+    // Overnight swings (by each player's own sequence)
+    let bestComeback: {
+        playerId: string;
+        name: string;
+        swingCents: number;
+    } | null = null;
+    let worstComedown: {
+        playerId: string;
+        name: string;
+        swingCents: number;
+    } | null = null;
+
+    for (const [playerId, rec] of byPlayer) {
+        for (let i = 1; i < rec.profits.length; i++) {
+            const prev = rec.profits[i - 1]!;
+            const next = rec.profits[i]!;
+            const swing = next - prev;
+            if (prev < 0 && next > 0) {
+                if (!bestComeback || swing > bestComeback.swingCents) {
+                    bestComeback = {
+                        playerId,
+                        name: rec.name,
+                        swingCents: swing
+                    };
+                }
+            }
+            if (prev > 0 && next < 0) {
+                const drop = prev - next;
+                if (!worstComedown || drop > worstComedown.swingCents) {
+                    worstComedown = {
+                        playerId,
+                        name: rec.name,
+                        swingCents: drop
+                    };
+                }
+            }
+        }
+    }
+
+    // Attendance ironman: longest consecutive games attended in league order
+    const gameIds = games.map((g) => g.id);
+    const gameIndex = new Map(gameIds.map((id, i) => [id, i]));
+    let ironman: { playerId: string; name: string; streak: number } | null =
+        null;
+    for (const [playerId, rec] of byPlayer) {
+        const idxs = rec.gameIdsInOrder
+            .map((id) => gameIndex.get(id)!)
+            .sort((a, b) => a - b);
+        let cur = 1;
+        let max = idxs.length > 0 ? 1 : 0;
+        for (let i = 1; i < idxs.length; i++) {
+            if (idxs[i]! === idxs[i - 1]! + 1) {
+                cur += 1;
+                if (cur > max) max = cur;
+            } else {
+                cur = 1;
+            }
+        }
+        if (!ironman || max > ironman.streak) {
+            ironman = { playerId, name: rec.name, streak: max };
+        }
+    }
+
+    // Consistent middle: average finish closest to true midfield for each night's field size
+    let midfielder: {
+        playerId: string;
+        name: string;
+        avgRank: number;
+        distance: number;
+    } | null = null;
+    for (const [playerId, rec] of byPlayer) {
+        if (rec.nights < WEIRD_MIN_NIGHTS) continue;
+        let distanceSum = 0;
+        let rankSum = 0;
+        for (let i = 0; i < rec.ranks.length; i++) {
+            const rank = rec.ranks[i]!;
+            const mid = (rec.fieldSizes[i]! + 1) / 2;
+            distanceSum += Math.abs(rank - mid);
+            rankSum += rank;
+        }
+        const distance = distanceSum / rec.ranks.length;
+        const avgRank = rankSum / rec.ranks.length;
+        if (!midfielder || distance < midfielder.distance) {
+            midfielder = {
+                playerId,
+                name: rec.name,
+                avgRank,
+                distance
+            };
+        }
+    }
+
+    // Volatility volcano
+    let volcano: {
+        playerId: string;
+        name: string;
+        stdevCents: number;
+    } | null = null;
+    for (const [playerId, rec] of byPlayer) {
+        if (rec.nights < WEIRD_MIN_NIGHTS_VOLATILITY) continue;
+        const sd = stdev(rec.profits);
+        if (!volcano || sd > volcano.stdevCents) {
+            volcano = { playerId, name: rec.name, stdevCents: sd };
+        }
+    }
+
+    // Table whale: highest average pot share
+    let whale: { playerId: string; name: string; avgShare: number } | null =
+        null;
+    for (const [playerId, rec] of byPlayer) {
+        if (rec.nights < WEIRD_MIN_NIGHTS || rec.potShares.length === 0)
+            continue;
+        const avgShare =
+            rec.potShares.reduce((s, v) => s + v, 0) / rec.potShares.length;
+        if (!whale || avgShare > whale.avgShare) {
+            whale = { playerId, name: rec.name, avgShare };
+        }
+    }
+
+    // Social butterfly
+    let butterfly: {
+        playerId: string;
+        name: string;
+        opponents: number;
+    } | null = null;
+    for (const [playerId, rec] of byPlayer) {
+        if (rec.nights < WEIRD_MIN_NIGHTS) continue;
+        const n = rec.opponents.size;
+        if (!butterfly || n > butterfly.opponents) {
+            butterfly = { playerId, name: rec.name, opponents: n };
+        }
+    }
+
+    // ATM of the league (most donated)
+    let atm: { playerId: string; name: string; donatedCents: number } | null =
+        null;
+    for (const [playerId, rec] of byPlayer) {
+        if (rec.nights < WEIRD_MIN_NIGHTS) continue;
+        if (!atm || rec.donatedCents > atm.donatedCents) {
+            atm = {
+                playerId,
+                name: rec.name,
+                donatedCents: rec.donatedCents
+            };
+        }
+    }
+
+    // Pot magnet: biggest pot share when winning
+    let potMagnet: {
+        playerId: string;
+        name: string;
+        avgWinShare: number;
+        wins: number;
+    } | null = null;
+    for (const [playerId, rec] of byPlayer) {
+        if (rec.winPotShares.length < 2) continue;
+        const avg =
+            rec.winPotShares.reduce((s, v) => s + v, 0) /
+            rec.winPotShares.length;
+        if (!potMagnet || avg > potMagnet.avgWinShare) {
+            potMagnet = {
+                playerId,
+                name: rec.name,
+                avgWinShare: avg,
+                wins: rec.winPotShares.length
+            };
+        }
+    }
+
+    const bridesmaid = pickTopByCount(
+        new Map(
+            [...byPlayer].map(([id, r]) => [
+                id,
+                { name: r.name, count: r.seconds }
+            ])
+        ),
+        2
+    );
+    const bronzeCollector = pickTopByCount(
+        new Map(
+            [...byPlayer].map(([id, r]) => [
+                id,
+                { name: r.name, count: r.thirds }
+            ])
+        ),
+        2
+    );
+    const bubbleMerchant = pickTopByCount(
+        new Map(
+            [...byPlayer].map(([id, r]) => [
+                id,
+                { name: r.name, count: r.fourths }
+            ])
+        ),
+        2
+    );
+    const feltCollector = pickTopByCount(
+        new Map(
+            [...byPlayer].map(([id, r]) => [
+                id,
+                { name: r.name, count: r.felted }
+            ])
+        ),
+        1
+    );
+    const breakEvenGhost = pickTopByCount(
+        new Map(
+            [...byPlayer].map(([id, r]) => [
+                id,
+                { name: r.name, count: r.breakEven }
+            ])
+        ),
+        1
+    );
+    const shortStackAssassin = pickTopByCount(
+        new Map(
+            [...byPlayer].map(([id, r]) => [
+                id,
+                { name: r.name, count: r.shortStackWins }
+            ])
+        ),
+        1
+    );
+
+    const weekdayNames = [
+        'Sunday',
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday'
+    ];
+    let cursedWeekday: { day: string; avgLossCents: number } | null = null;
+    for (const [day, rec] of weekdayLosses) {
+        if (rec.nights < 2) continue;
+        const avg = rec.lossCents / rec.nights;
+        if (!cursedWeekday || avg > cursedWeekday.avgLossCents) {
+            cursedWeekday = {
+                day: weekdayNames[day] ?? 'Unknown',
+                avgLossCents: avg
+            };
+        }
+    }
+
+    const push = (insight: WeirdInsight) => insights.push(insight);
+
+    if (bridesmaid) {
+        push({
+            id: 'eternal-bridesmaid',
+            title: 'Eternal bridesmaid',
+            blurb: 'Most 2nd-place finishes — always there, never quite.',
+            headline: bridesmaid.name,
+            valueLabel: `${bridesmaid.count} silver finishes`,
+            playerId: bridesmaid.playerId
+        });
+    }
+    if (bronzeCollector) {
+        push({
+            id: 'bronze-philosopher',
+            title: 'Bronze philosopher',
+            blurb: 'Most 3rd-place finishes. Podium adjacent, spiritually zen.',
+            headline: bronzeCollector.name,
+            valueLabel: `${bronzeCollector.count} bronze finishes`,
+            playerId: bronzeCollector.playerId
+        });
+    }
+    if (bubbleMerchant) {
+        push({
+            id: 'bubble-merchant',
+            title: 'Bubble merchant',
+            blurb: 'Most 4th-place finishes — one spot off the podium, every time it hurts.',
+            headline: bubbleMerchant.name,
+            valueLabel: `${bubbleMerchant.count} bubble nights`,
+            playerId: bubbleMerchant.playerId
+        });
+    }
+    if (shortStackAssassin) {
+        push({
+            id: 'short-stack-assassin',
+            title: 'Short-stack assassin',
+            blurb: 'Most nights won while holding the smallest buy-in at the table.',
+            headline: shortStackAssassin.name,
+            valueLabel: `${shortStackAssassin.count} short-stack wins`,
+            playerId: shortStackAssassin.playerId
+        });
+    }
+    if (feltCollector) {
+        push({
+            id: 'felt-collector',
+            title: 'Felt collector',
+            blurb: 'Most nights cashing out $0. The felt remembers.',
+            headline: feltCollector.name,
+            valueLabel: `${feltCollector.count} zero cash-outs`,
+            playerId: feltCollector.playerId
+        });
+    }
+    if (breakEvenGhost) {
+        push({
+            id: 'break-even-ghost',
+            title: 'Break-even ghost',
+            blurb: 'Most nights finishing at exactly $0. Were they even here?',
+            headline: breakEvenGhost.name,
+            valueLabel: `${breakEvenGhost.count} flat nights`,
+            playerId: breakEvenGhost.playerId
+        });
+    }
+    if (volcano) {
+        push({
+            id: 'volatility-volcano',
+            title: 'Volatility volcano',
+            blurb: 'Highest swing in nightly results (std. deviation). Never boring.',
+            headline: volcano.name,
+            valueLabel: `${formatUsdFromCents(Math.round(volcano.stdevCents))} σ`,
+            playerId: volcano.playerId
+        });
+    }
+    if (bestComeback) {
+        push({
+            id: 'comeback-comet',
+            title: 'Comeback comet',
+            blurb: 'Biggest overnight swing from a losing night to a winning one.',
+            headline: bestComeback.name,
+            valueLabel: `${formatUsdFromCents(bestComeback.swingCents)} swing`,
+            playerId: bestComeback.playerId
+        });
+    }
+    if (worstComedown) {
+        push({
+            id: 'comedown-crater',
+            title: 'Comedown crater',
+            blurb: 'Biggest overnight crash from a winning night to a losing one.',
+            headline: worstComedown.name,
+            valueLabel: `${formatUsdFromCents(worstComedown.swingCents)} drop`,
+            playerId: worstComedown.playerId
+        });
+    }
+    if (ironman && ironman.streak >= 3) {
+        push({
+            id: 'attendance-ironman',
+            title: 'Attendance ironman',
+            blurb: 'Longest streak of consecutive league nights played.',
+            headline: ironman.name,
+            valueLabel: `${ironman.streak} nights in a row`,
+            playerId: ironman.playerId
+        });
+    }
+    if (whale) {
+        push({
+            id: 'table-whale',
+            title: 'Table whale',
+            blurb: 'Highest average share of the pot bought in.',
+            headline: whale.name,
+            valueLabel: `${Math.round(whale.avgShare * 100)}% of pot`,
+            playerId: whale.playerId
+        });
+    }
+    if (butterfly) {
+        push({
+            id: 'social-butterfly',
+            title: 'Social butterfly',
+            blurb: 'Faced the most unique opponents across all nights.',
+            headline: butterfly.name,
+            valueLabel: `${butterfly.opponents} unique foes`,
+            playerId: butterfly.playerId
+        });
+    }
+    if (atm) {
+        push({
+            id: 'league-atm',
+            title: 'League ATM',
+            blurb: 'Most dollars donated across losing nights. Thank you for your service.',
+            headline: atm.name,
+            valueLabel: `${formatUsdFromCents(-atm.donatedCents)} donated`,
+            playerId: atm.playerId
+        });
+    }
+    if (potMagnet) {
+        push({
+            id: 'pot-magnet',
+            title: 'Pot magnet',
+            blurb: 'When they win, they win the big ones (highest avg pot share on wins).',
+            headline: potMagnet.name,
+            valueLabel: `${Math.round(potMagnet.avgWinShare * 100)}% pot on wins`,
+            playerId: potMagnet.playerId
+        });
+    }
+    if (midfielder) {
+        push({
+            id: 'midfield-maestro',
+            title: 'Midfield maestro',
+            blurb: 'Average finish closest to the true middle of each night’s field.',
+            headline: midfielder.name,
+            valueLabel: `avg finish ${midfielder.avgRank.toFixed(2)}`,
+            playerId: midfielder.playerId
+        });
+    }
+    if (biggestHeist && biggestHeist.profitCents > 0) {
+        push({
+            id: 'single-night-heist',
+            title: 'Single-night heist',
+            blurb: 'Biggest profit taken in one night.',
+            headline: biggestHeist.name,
+            valueLabel: `${formatUsdFromCents(biggestHeist.profitCents)} · ${biggestHeist.gameName}`,
+            playerId: biggestHeist.playerId,
+            gameId: biggestHeist.gameId
+        });
+    }
+    if (chaosNight && chaosNight.stdev > 0) {
+        push({
+            id: 'chaos-night',
+            title: 'Chaos night',
+            blurb: 'The night with the wildest spread of results across the table.',
+            headline: chaosNight.name,
+            valueLabel: `${formatUsdFromCents(Math.round(chaosNight.stdev))} result spread`,
+            gameId: chaosNight.gameId
+        });
+    }
+    if (photoFinish) {
+        push({
+            id: 'photo-finish',
+            title: 'Photo finish',
+            blurb: 'Tightest night — smallest gap between first and last.',
+            headline: photoFinish.name,
+            valueLabel: `${formatUsdFromCents(photoFinish.gapCents)} 1st→last gap`,
+            gameId: photoFinish.gameId
+        });
+    }
+    if (cursedWeekday) {
+        push({
+            id: 'cursed-weekday',
+            title: 'Cursed weekday',
+            blurb: 'Day of the week with the highest average dollars lost at the table.',
+            headline: cursedWeekday.day,
+            valueLabel: `${formatUsdFromCents(-Math.round(cursedWeekday.avgLossCents))} avg lost`
+        });
+    }
+
+    return insights;
 }

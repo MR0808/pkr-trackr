@@ -222,3 +222,15 @@ export type HeaterIndexRow = {
     name: string;
     heaterNightCount: number;
 };
+
+/** Quirky insight cards for the Insights page. */
+export type WeirdInsight = {
+    id: string;
+    title: string;
+    blurb: string;
+    /** Player name, night name, or short league label */
+    headline: string;
+    valueLabel: string;
+    playerId?: string | null;
+    gameId?: string | null;
+};

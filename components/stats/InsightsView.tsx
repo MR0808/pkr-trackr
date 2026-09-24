@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -13,19 +14,22 @@ import {
 import type {
     InsightsNarrative,
     SkillRatingRow,
-    HeaterIndexRow
+    HeaterIndexRow,
+    WeirdInsight
 } from '@/types/stats';
 
 type Props = {
     narrative: InsightsNarrative;
     skillRatings: SkillRatingRow[];
     heaterIndex: HeaterIndexRow[];
+    weirdInsights: WeirdInsight[];
 };
 
 export function InsightsView({
     narrative,
     skillRatings,
-    heaterIndex
+    heaterIndex,
+    weirdInsights
 }: Props) {
     return (
         <div className="space-y-6">
@@ -42,6 +46,64 @@ export function InsightsView({
                     </p>
                 </CardContent>
             </Card>
+
+            <section className="space-y-3">
+                <div>
+                    <h2 className="text-lg font-semibold sm:text-xl">
+                        Weird &amp; wonderful
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                        Quirky awards the leaderboards would never dare print.
+                        Respectfully unserious.
+                    </p>
+                </div>
+                {weirdInsights.length === 0 ? (
+                    <Card>
+                        <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                            Not enough closed nights yet for the deep lore.
+                        </CardContent>
+                    </Card>
+                ) : (
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {weirdInsights.map((insight) => (
+                            <Card key={insight.id} className="min-w-0">
+                                <CardHeader className="space-y-1 pb-2">
+                                    <CardTitle className="text-sm font-medium">
+                                        {insight.title}
+                                    </CardTitle>
+                                    <p className="text-xs text-muted-foreground">
+                                        {insight.blurb}
+                                    </p>
+                                </CardHeader>
+                                <CardContent className="space-y-1">
+                                    <div className="truncate text-xl font-bold">
+                                        {insight.playerId ? (
+                                            <Link
+                                                href={`/players/${insight.playerId}`}
+                                                className="text-primary hover:underline"
+                                            >
+                                                {insight.headline}
+                                            </Link>
+                                        ) : insight.gameId ? (
+                                            <Link
+                                                href={`/games/${insight.gameId}/results`}
+                                                className="text-primary hover:underline"
+                                            >
+                                                {insight.headline}
+                                            </Link>
+                                        ) : (
+                                            insight.headline
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        {insight.valueLabel}
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                )}
+            </section>
 
             <Card>
                 <CardHeader>
@@ -123,17 +185,6 @@ export function InsightsView({
                             </TableBody>
                         </Table>
                     )}
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Projection</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <p className="text-sm text-muted-foreground">
-                        Coming soon: season projection
-                    </p>
                 </CardContent>
             </Card>
         </div>

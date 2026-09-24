@@ -5,7 +5,8 @@ import {
     getSeasonsForFilter,
     getInsightsNarrative,
     getSkillRatings,
-    getHeaterIndex
+    getHeaterIndex,
+    getWeirdWonderfulStats
 } from '@/lib/stats-queries';
 import { getLeaderboardLimits } from '@/lib/leaderboard-config';
 import { InsightsView } from '@/components/stats/InsightsView';
@@ -20,12 +21,13 @@ export default async function StatsInsightsPage({ searchParams }: Props) {
     const groupId = await getDefaultGroupId();
     const limits = getLeaderboardLimits();
 
-    const [seasonOptions, narrative, skillRatings, heaterIndex] =
+    const [seasonOptions, narrative, skillRatings, heaterIndex, weirdInsights] =
         await Promise.all([
             getSeasonsForFilter(groupId),
             getInsightsNarrative(groupId, filters),
             getSkillRatings(groupId, filters),
-            getHeaterIndex(groupId, filters)
+            getHeaterIndex(groupId, filters),
+            getWeirdWonderfulStats(groupId, filters)
         ]);
 
     return (
@@ -36,7 +38,7 @@ export default async function StatsInsightsPage({ searchParams }: Props) {
                         Insights
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                        League narrative, experimental ratings, heater index.
+                        League narrative, weird awards, experimental ratings.
                     </p>
                 </div>
                 <StatsFilters
@@ -51,6 +53,7 @@ export default async function StatsInsightsPage({ searchParams }: Props) {
                 narrative={narrative}
                 skillRatings={skillRatings}
                 heaterIndex={heaterIndex}
+                weirdInsights={weirdInsights}
             />
         </div>
     );
