@@ -164,7 +164,7 @@ export function StatsBySeason({ seasons }: { seasons: SeasonSummary[] }) {
                                                     Won
                                                 </TableHead>
                                                 <TableHead className="hidden text-right sm:table-cell">
-                                                    Podium
+                                                    Podium pts
                                                 </TableHead>
                                             </TableRow>
                                         </TableHeader>

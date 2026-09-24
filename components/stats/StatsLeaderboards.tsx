@@ -45,7 +45,7 @@ const COLUMNS: {
     { key: 'seasonScore', label: 'Score', align: 'right', hideOnMobile: true },
     { key: 'totalGames', label: 'Nights', align: 'right' },
     { key: 'nightsWon', label: 'Won', align: 'right', hideOnMobile: true },
-    { key: 'podiumPoints', label: 'Podium', align: 'right', hideOnMobile: true },
+    { key: 'podiumPoints', label: 'Podium pts', align: 'right', hideOnMobile: true },
     { key: 'winRate', label: 'Win rate', align: 'right', hideOnMobile: true },
     { key: 'nightsInProfit', label: 'In profit', align: 'right', hideOnMobile: true }
 ];
@@ -223,7 +223,7 @@ export function StatsLeaderboards({
                 </CardContent>
             </Card>
             <p className="mt-2 px-4 pb-4 text-xs text-muted-foreground sm:px-6 sm:pb-6">
-                Score = ROI × √(buy-in). Podium: 3 pts 1st, 2 pts 2nd, 1 pt 3rd per night. In profit = nights with positive result. Click a column header to sort.
+                Score = ROI × √(buy-in). Podium pts: 3 for 1st, 2 for 2nd, 1 for 3rd per night. In profit = nights with positive result. Click a column header to sort.
             </p>
         </div>
     );

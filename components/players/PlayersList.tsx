@@ -45,7 +45,7 @@ const COLUMNS: {
     { key: 'roi', label: 'ROI', align: 'right', hideOnMobile: true },
     { key: 'totalGames', label: 'Nights', align: 'right' },
     { key: 'nightsWon', label: 'Won', align: 'right', hideOnMobile: true },
-    { key: 'podiumPoints', label: 'Podium', align: 'right', hideOnMobile: true },
+    { key: 'podiumPoints', label: 'Podium pts', align: 'right', hideOnMobile: true },
     { key: 'winRate', label: 'Win rate', align: 'right', hideOnMobile: true },
     { key: 'nightsInProfit', label: 'In profit', align: 'right', hideOnMobile: true }
 ];
